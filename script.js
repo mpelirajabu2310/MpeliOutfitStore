@@ -920,6 +920,7 @@ document.querySelectorAll(".nav-item").forEach(button => {
     button.classList.add("active");
     document.querySelector(`#${button.dataset.page}`).classList.add("active");
     document.querySelector(".sidebar").classList.remove("open");
+    closeSidebar();
     // Load page-specific data immediately
     const page = button.dataset.page;
     try {
@@ -938,8 +939,37 @@ document.querySelectorAll(".nav-item").forEach(button => {
 });
 
 document.querySelector("#menuButton")?.addEventListener("click", () => {
-  document.querySelector(".sidebar").classList.toggle("open");
+  toggleSidebar();
 });
+
+document.querySelector("#sidebarOverlay")?.addEventListener("click", () => {
+  closeSidebar();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSidebar();
+});
+
+function toggleSidebar() {
+  const sidebar = document.querySelector(".sidebar");
+  const overlay = document.querySelector("#sidebarOverlay");
+  const isOpen = sidebar.classList.contains("open");
+  if (isOpen) {
+    closeSidebar();
+  } else {
+    sidebar.classList.add("open");
+    overlay.classList.add("active");
+    document.body.classList.add("sidebar-open");
+  }
+}
+
+function closeSidebar() {
+  const sidebar = document.querySelector(".sidebar");
+  const overlay = document.querySelector("#sidebarOverlay");
+  sidebar.classList.remove("open");
+  overlay.classList.remove("active");
+  document.body.classList.remove("sidebar-open");
+}
 
 document.querySelector("#logoutButton")?.addEventListener("click", async () => {
   try {

@@ -71,6 +71,7 @@ $timestamp = time();
   </main>
 
   <div class="app-shell hidden" id="appShell">
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <aside class="sidebar">
       <div class="sidebar-brand">
         <span class="sidebar-title">Mpeli Outfit Store</span>
@@ -94,7 +95,7 @@ $timestamp = time();
 
     <section class="workspace">
       <header class="topbar">
-        <button class="menu-button" id="menuButton" aria-label="Toggle menu" data-i18n="common.menu" data-i18n-aria-label="aria.toggleMenu">Menu</button>
+        <button class="menu-button" id="menuButton" aria-label="Toggle menu" data-i18n-aria-label="aria.toggleMenu"><span class="hamburger-icon" aria-hidden="true">&#9776;</span></button>
         <div class="search-box">
           <span data-i18n="common.search">Search</span>
           <input type="search" placeholder="Products, receipts, expenses..." id="globalSearch" data-i18n-placeholder="search.globalPlaceholder" />
@@ -277,7 +278,7 @@ $timestamp = time();
         </article>
         <article class="panel hidden" id="reportOutputPanel">
           <div class="panel-title"><h3 data-i18n="reports.generatedReport">Generated Report</h3><small id="reportGeneratedAt"></small><small id="reportGeneratedBy"></small></div>
-          <div class="report-output" id="reportOutput"></div>
+          <div class="report-output table-wrap" id="reportOutput"></div>
           <div class="settings-actions"><button class="ghost-button" onclick="downloadPdfReport()" data-i18n="reports.downloadPdf">Download PDF</button></div>
         </article>
       </main>
