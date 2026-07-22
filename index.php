@@ -46,11 +46,11 @@ $timestamp = time();
         <p data-i18n="login.subtitle">Sign in to manage products, sales, inventory, and boutique reports.</p>
         <label>
           <span data-i18n="login.username">Username</span>
-          <input type="text" autocomplete="username" />
+          <input type="text" id="loginUsername" autocomplete="username" />
         </label>
         <label>
           <span data-i18n="login.password">Password</span>
-          <input type="password" autocomplete="current-password" />
+          <input type="password" id="loginPassword" autocomplete="current-password" />
         </label>
         <button type="submit" data-i18n="login.signIn">Sign in</button>
         <button type="button" class="link-button" id="forgotPasswordLink" data-i18n="login.forgotPassword">Forgot password?</button>

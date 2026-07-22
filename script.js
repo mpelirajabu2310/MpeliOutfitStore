@@ -791,11 +791,12 @@ async function completePayment() {
 
 document.querySelector("#loginForm")?.addEventListener("submit", async event => {
   event.preventDefault();
-  const fields = event.currentTarget.querySelectorAll("input");
+  const username = document.querySelector("#loginUsername").value.trim();
+  const password = document.querySelector("#loginPassword").value;
   try {
     const payload = await apiRequest("api/login.php", {
       method: "POST",
-      body: JSON.stringify({ username: fields[0].value, password: fields[1].value })
+      body: JSON.stringify({ username, password })
     });
     currentUser = payload.user;
     showApp();
@@ -842,6 +843,22 @@ document.querySelector("#resetPasswordForm")?.addEventListener("submit", async e
     });
     showToast(t("auth.passwordResetSuccess"));
     closeResetPasswordModal();
+
+    try {
+      const loginPayload = await apiRequest("api/login.php", {
+        method: "POST",
+        body: JSON.stringify({ username, password })
+      });
+      currentUser = loginPayload.user;
+      showApp();
+      showToast(t("login.welcome") + ", " + currentUser.name + "!");
+      await refreshAppData();
+      startDashboardAutoRefresh();
+    } catch (loginError) {
+      showLogin(true);
+      document.querySelector("#loginUsername").value = username;
+      showToast(t("auth.autoLoginFailed"), "error");
+    }
   } catch (error) {
     showToast(error.message, "error");
   }
@@ -888,7 +905,7 @@ document.querySelector("#ownerSetupForm")?.addEventListener("submit", async even
     } catch (loginError) {
       // Auto-login failed, show login form
       showLogin(true);
-      document.querySelector("#loginForm input[type='text']").value = username;
+      document.querySelector("#loginUsername").value = username;
     }
   } catch (error) {
     showToast(error.message, "error");

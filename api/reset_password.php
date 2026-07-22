@@ -49,4 +49,11 @@ $update->execute([
     'id' => $user['id'],
 ]);
 
-respond(['success' => true, 'message' => 'Password reset successfully. You can now log in.']);
+unset($_SESSION['reset_attempts'], $_SESSION['reset_last_attempt']);
+unset($_SESSION['login_attempts'], $_SESSION['login_last_attempt']);
+
+respond([
+    'success' => true,
+    'message' => 'Password reset successfully. You can now log in.',
+    'username' => $username,
+]);
