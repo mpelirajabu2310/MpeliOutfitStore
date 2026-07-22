@@ -30,6 +30,19 @@ if ($name === '' || $username === '' || $password === '') {
     respond(['success' => false, 'message' => 'Name, username, and password are required.'], 422);
 }
 
+if (strlen($name) > 100) {
+    respond(['success' => false, 'message' => 'Name must be 100 characters or fewer.'], 422);
+}
+if (strlen($username) > 50 || !preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+    respond(['success' => false, 'message' => 'Username must be 50 characters or fewer and contain only letters, numbers, and underscores.'], 422);
+}
+if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respond(['success' => false, 'message' => 'Invalid email format.'], 422);
+}
+if (strlen($email) > 100) {
+    respond(['success' => false, 'message' => 'Email must be 100 characters or fewer.'], 422);
+}
+
 if (strlen($password) < 8) {
     respond(['success' => false, 'message' => 'Password must be at least 8 characters.'], 422);
 }

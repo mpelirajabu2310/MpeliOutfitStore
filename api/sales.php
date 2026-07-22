@@ -11,7 +11,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $data = read_json_body();
 $items = $data['items'] ?? [];
+if (!is_array($items)) {
+    respond(['success' => false, 'message' => 'Items must be an array.'], 422);
+}
 $paymentMethod = (string)($data['payment_method'] ?? 'cash');
+if (!in_array($paymentMethod, ['cash', 'mobile', 'card'], true)) {
+    respond(['success' => false, 'message' => 'Invalid payment method.'], 422);
+}
 
 require_once __DIR__ . '/../services/SalesService.php';
 $salesService = new SalesService();

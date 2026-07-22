@@ -47,6 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($category === 'Other' && $expenseName === '') {
         respond(['success' => false, 'message' => 'Expense name is required when category is Other.'], 422);
     }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
+        respond(['success' => false, 'message' => 'Invalid expense_date format. Use YYYY-MM-DD.'], 422);
+    }
+    if (strlen($expenseName) > 255) {
+        respond(['success' => false, 'message' => 'Expense name must be 255 characters or fewer.'], 422);
+    }
 
     $expenseService->addExpense(
         $category,
@@ -84,6 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     }
     if ($amount <= 0) {
         respond(['success' => false, 'message' => 'Expense amount must be greater than zero.'], 422);
+    }
+    if ($expenseDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
+        respond(['success' => false, 'message' => 'Invalid expense_date format. Use YYYY-MM-DD.'], 422);
+    }
+    if (strlen($expenseName) > 255) {
+        respond(['success' => false, 'message' => 'Expense name must be 255 characters or fewer.'], 422);
     }
 
     $updateData = [];

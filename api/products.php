@@ -34,6 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($name === '') {
         respond(['success' => false, 'message' => 'Product name is required.'], 422);
     }
+    if (strlen($name) > 255) {
+        respond(['success' => false, 'message' => 'Product name must be 255 characters or fewer.'], 422);
+    }
     if ($buying <= 0) {
         respond(['success' => false, 'message' => 'Buying price must be greater than 0.'], 422);
     }
@@ -82,6 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
     if ($productId <= 0 || $name === '') {
         respond(['success' => false, 'message' => 'Product id and name are required.'], 422);
+    }
+    if (strlen($name) > 255) {
+        respond(['success' => false, 'message' => 'Product name must be 255 characters or fewer.'], 422);
     }
     if ($buying <= 0) {
         respond(['success' => false, 'message' => 'Buying price must be greater than 0.'], 422);

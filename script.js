@@ -5,6 +5,13 @@ let currentLanguage = localStorage.getItem("preferredLanguage") || "en";
 const cart = new Map();
 const discountPrices = new Map();
 
+function escapeHtml(str) {
+  if (str == null) return "";
+  const div = document.createElement("div");
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
 // Force clean container state on load - let init() decide which form to show
 (() => {
   try {
@@ -272,7 +279,7 @@ function renderProducts() {
     return `
       <article class="product-card">
         <div class="product-body">
-          <h3>${product.name} ${stockBadge(product)}</h3>
+          <h3>${escapeHtml(product.name)} ${stockBadge(product)}</h3>
           <div class="price-grid">
             ${buyingHtml}
             <span>${t("products.selling")} <strong>${money(product.selling)}</strong></span>
@@ -295,13 +302,13 @@ function renderPosProducts() {
     return `
     <article class="pos-item">
       <div>
-        <strong>${product.name}</strong> ${stockBadge(product)}
+        <strong>${escapeHtml(product.name)}</strong> ${stockBadge(product)}
         <small>${money(product.selling)} / ${t("products.stock")} ${product.stock}${minPriceInfo}</small>
       </div>
       <div class="qty-controls">
-        <button type="button" data-dec="${index}" aria-label="${t("common.decrease")} ${product.name}">-</button>
+        <button type="button" data-dec="${index}" aria-label="${t("common.decrease")} ${escapeHtml(product.name)}">-</button>
         <span>${cart.get(index) || 0}</span>
-        <button type="button" data-inc="${index}" aria-label="${t("common.increase")} ${product.name}">+</button>
+        <button type="button" data-inc="${index}" aria-label="${t("common.increase")} ${escapeHtml(product.name)}">+</button>
       </div>
     </article>
   `}).join("") || `<p class="empty-state">${t("products.noProducts")}</p>`;
@@ -330,7 +337,7 @@ function renderCart() {
       : "";
     return `<div class="cart-line">
       <span>
-        ${product.name} x ${qty}
+        ${escapeHtml(product.name)} x ${qty}
         ${minPriceInfo}
       </span>
       <span>${priceDisplay} ${discountBtn}</span>
@@ -376,7 +383,7 @@ function renderBarChart(container, chart, hasData, valueKey = "value") {
     const x = gap + index * (barWidth + gap);
     const y = height - barHeight - 20;
     const label = item.product_name || formatChartDay(item.sale_day || item.report_month);
-    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}"><title>${label}: ${money(amount)}</title></rect>`;
+    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}"><title>${escapeHtml(label)}: ${money(amount)}</title></rect>`;
   }).join("");
   container.innerHTML = `<svg class="sales-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${t("aria.salesAnalyticsChart")}">${bars}</svg>`;
 }
@@ -413,7 +420,7 @@ function renderStockAlerts(alerts) {
   panel.classList.remove("hidden");
   list.innerHTML = alerts.map(item => {
     const label = item.stock_status === "out_of_stock" ? t("inventory.outOfStock") : t("dashboard.lowStockLabel");
-    return `<li><strong>${item.product_name}</strong> — ${item.total_stock} ${t("products.stock").toLowerCase()} <em>(${label})</em></li>`;
+    return `<li><strong>${escapeHtml(item.product_name)}</strong> — ${item.total_stock} ${t("products.stock").toLowerCase()} <em>(${label})</em></li>`;
   }).join("");
 }
 
@@ -455,9 +462,9 @@ async function loadDashboard() {
 
   const rows = payload.recent_sales.map(sale => `
     <tr>
-      <td>${sale.receipt_number}</td>
+      <td>${escapeHtml(sale.receipt_number)}</td>
       <td>${t("sales.posSale")}</td>
-      <td>${translatedCustomerType(sale.customer_type)}</td>
+      <td>${escapeHtml(translatedCustomerType(sale.customer_type))}</td>
       <td>${money(sale.total_amount)}</td>
       <td class="owner-only">${sale.total_profit === null ? t("role.hidden") : money(sale.total_profit)}</td>
       <td><span class="status paid">${t(`status.${sale.payment_status}`)}</span></td>
@@ -478,14 +485,6 @@ async function loadReports() {
   document.querySelector("#reportDailySales").textContent = money(payload.stats.daily_sales);
   document.querySelector("#reportWeeklySales").textContent = money(payload.stats.weekly_sales);
   document.querySelector("#reportMonthlySales").textContent = money(payload.stats.monthly_sales);
-
-  // Legacy fields (keep for backward compat)
-  const reportProfitEl = document.querySelector("#reportProfit");
-  if (reportProfitEl) reportProfitEl.textContent = payload.stats.monthly_profit === null ? t("role.hidden") : money(payload.stats.monthly_profit);
-  const reportExpensesEl = document.querySelector("#reportExpenses");
-  if (reportExpensesEl) reportExpensesEl.textContent = payload.stats.monthly_expenses === null ? t("role.hidden") : money(payload.stats.monthly_expenses);
-  const reportNetProfitEl = document.querySelector("#reportNetProfit");
-  if (reportNetProfitEl) reportNetProfitEl.textContent = payload.stats.monthly_net_profit === null ? t("role.hidden") : money(payload.stats.monthly_net_profit);
 
   const note = (id, has) => {
     const el = document.querySelector(id);
@@ -522,7 +521,7 @@ async function loadReports() {
       let total = 0;
       container.innerHTML = payload.expense_categories.map(c => {
         total += Number(c.total);
-        return `<div class="fin-row"><span>${t("expenseCategory." + c.category) || c.category}</span><strong>${money(c.total)}</strong></div>`;
+        return `<div class="fin-row"><span>${escapeHtml(t("expenseCategory." + c.category) || c.category)}</span><strong>${money(c.total)}</strong></div>`;
       }).join("") + `<div class="fin-row fin-divider"><span>${t("expenses.thisMonth")}</span><strong>${money(total)}</strong></div>`;
     }
   }
@@ -538,8 +537,8 @@ async function loadReports() {
   if (bestBox) {
     bestBox.innerHTML = payload.best_sellers.map(item => `
       <div class="best-seller-row">
-        <strong>${item.product_name}</strong>
-        <span>${item.category_name || ""}</span>
+        <strong>${escapeHtml(item.product_name)}</strong>
+        <span>${escapeHtml(item.category_name || "")}</span>
         <small>${t("reports.unitsSold", { count: item.units_sold })} · ${money(item.revenue)}</small>
       </div>
     `).join("");
@@ -563,19 +562,19 @@ async function loadInventory() {
     allList.innerHTML = payload.all_products.length
       ? payload.all_products.map(item => {
           const statusClass = item.stock_status === "out_of_stock" ? "danger" : item.stock_status === "low_stock" ? "warning" : "";
-          return `<li><strong>${item.product_name}</strong> — ${item.total_stock} ${t("products.stock").toLowerCase()}${statusClass ? ` <span class="stock-badge ${statusClass}">${t("inventory." + (item.stock_status === "out_of_stock" ? "outOfStock" : "lowStock"))}</span>` : ""}</li>`;
+          return `<li><strong>${escapeHtml(item.product_name)}</strong> — ${item.total_stock} ${t("products.stock").toLowerCase()}${statusClass ? ` <span class="stock-badge ${statusClass}">${t("inventory." + (item.stock_status === "out_of_stock" ? "outOfStock" : "lowStock"))}</span>` : ""}</li>`;
         }).join("")
       : `<li>${t("products.noProducts")}</li>`;
   }
 
   const lowList = document.querySelector("#lowStockList");
   lowList.innerHTML = payload.low_stock_items.length
-    ? payload.low_stock_items.map(item => `<li>${item.product_name} — ${item.total_stock} ${t("products.stock").toLowerCase()} (${t("dashboard.lowStockLabel")})</li>`).join("")
+    ? payload.low_stock_items.map(item => `<li>${escapeHtml(item.product_name)} — ${item.total_stock} ${t("products.stock").toLowerCase()} (${t("dashboard.lowStockLabel")})</li>`).join("")
     : `<li>${t("inventory.noLowStock")}</li>`;
 
   const outList = document.querySelector("#outStockList");
   outList.innerHTML = payload.out_of_stock_items.length
-    ? payload.out_of_stock_items.map(item => `<li>${item.product_name}</li>`).join("")
+    ? payload.out_of_stock_items.map(item => `<li>${escapeHtml(item.product_name)}</li>`).join("")
     : `<li>${t("inventory.noOutStock")}</li>`;
 }
 
@@ -642,8 +641,8 @@ function downloadPdfReport() {
   if (!win) { showToast("Please allow popups for PDF download.", "error"); return; }
   const stamp = document.querySelector("#reportGeneratedAt")?.textContent || "";
   const generatorName = document.querySelector("#reportGeneratedBy")?.textContent || "";
-  const footerHtml = receiptFooterGlobal ? `<p style="color:#888;font-size:12px;text-align:center;margin-top:20px;border-top:1px solid #ddd;padding-top:12px;">${receiptFooterGlobal}</p>` : "";
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${shopNameGlobal} Report</title><style>
+  const footerHtml = receiptFooterGlobal ? `<p style="color:#888;font-size:12px;text-align:center;margin-top:20px;border-top:1px solid #ddd;padding-top:12px;">${escapeHtml(receiptFooterGlobal)}</p>` : "";
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(shopNameGlobal)} Report</title><style>
     body { font: 14px/1.5 sans-serif; color: #222; max-width: 900px; margin: 20px auto; padding: 20px; }
     h1 { color: #c9a24e; border-bottom: 2px solid #c9a24e; padding-bottom: 8px; }
     table { width: 100%; border-collapse: collapse; margin: 16px 0; }
@@ -651,7 +650,7 @@ function downloadPdfReport() {
     th { background: #f5f3ee; font-weight: 700; }
     caption { font-weight: 700; margin: 8px 0; text-align: left; font-size: 15px; }
     @media print { body { margin: 0; padding: 10px; } }
-  </style></head><body><h1>${shopNameGlobal}</h1><p>${stamp}</p><p>Generated by: ${generatorName}</p>${output.innerHTML}${footerHtml}<p style="color:#888;font-size:12px;text-align:center;margin-top:30px;">Generated on ${new Date().toLocaleString()}</p><script>window.onload=function(){window.print()}<\/script></body></html>`);
+  </style></head><body><h1>${escapeHtml(shopNameGlobal)}</h1><p>${escapeHtml(stamp)}</p><p>Generated by: ${escapeHtml(generatorName)}</p>${output.innerHTML}${footerHtml}<p style="color:#888;font-size:12px;text-align:center;margin-top:30px;">Generated on ${escapeHtml(new Date().toLocaleString())}</p><script>window.onload=function(){window.print()}<\/script></body></html>`);
   win.document.close();
 }
 
@@ -666,7 +665,7 @@ async function loadExpenses() {
     categoriesEl.innerHTML = payload.today_categories.length
       ? payload.today_categories.map(c => `
           <div class="expense-row" style="padding:6px 0">
-            <span>${c.category}</span>
+            <span>${escapeHtml(c.category)}</span>
             <strong>${money(c.total)}</strong>
           </div>
         `).join("")
@@ -689,11 +688,11 @@ async function loadExpenses() {
       : "";
     const displayCategory = e.expense_name || e.category;
     return `<tr>
-      <td>${e.expense_date}</td>
-      <td>${displayCategory}</td>
-      <td>${e.description || "-"}</td>
+      <td>${escapeHtml(e.expense_date)}</td>
+      <td>${escapeHtml(displayCategory)}</td>
+      <td>${escapeHtml(e.description) || "-"}</td>
       <td>${money(e.amount)}</td>
-      <td>${e.created_by_name}</td>
+      <td>${escapeHtml(e.created_by_name)}</td>
       ${actions}
     </tr>`;
   }).join("");
@@ -704,10 +703,10 @@ async function loadUsers() {
   const payload = await apiRequest("api/users.php");
   document.querySelector("#usersBody").innerHTML = payload.users.map(user => `
     <tr data-user-id="${user.id}">
-      <td>${user.name}</td>
-      <td>${user.username}</td>
-      <td>${user.role}</td>
-      <td>${user.status}</td>
+      <td>${escapeHtml(user.name)}</td>
+      <td>${escapeHtml(user.username)}</td>
+      <td>${escapeHtml(user.role)}</td>
+      <td>${escapeHtml(user.status)}</td>
       <td class="user-actions">
         <button type="button" class="ghost-button" data-edit-user="${user.id}">${t("users.edit")}</button>
         <button type="button" class="ghost-button" data-toggle-user="${user.id}" data-status="${user.status}">${user.status === "active" ? t("users.disable") : t("users.enable")}</button>
@@ -954,8 +953,8 @@ function performSearch(query) {
     ? filtered.map(p => {
         const stockLabel = p.stock === 0 ? `<span class="stock-badge danger">${t("inventory.outOfStock")}</span>` : p.stock <= lowStockThreshold ? `<span class="stock-badge warning">${t("dashboard.lowStockLabel")}</span>` : "";
         return `<article class="product-card">
-          <div class="product-image-placeholder">${p.name[0]}</div>
-          <strong>${p.name}</strong>
+          <div class="product-image-placeholder">${escapeHtml(p.name[0])}</div>
+          <strong>${escapeHtml(p.name)}</strong>
           <span>${t("products.selling")}: ${money(p.selling)}</span>
           <span>${t("products.stock")}: ${p.stock} ${stockLabel}</span>
         </article>`;
@@ -969,8 +968,8 @@ function performSearch(query) {
           const qty = cart.get(idx) || 0;
           const atMax = qty >= p.stock;
           return `<div class="pos-item ${qty > 0 ? "active" : ""}">
-            <div class="product-image-placeholder">${p.name[0]}</div>
-            <strong>${p.name}</strong>
+            <div class="product-image-placeholder">${escapeHtml(p.name[0])}</div>
+            <strong>${escapeHtml(p.name)}</strong>
             <span>${money(p.selling)}</span>
             <div class="qty-controls">
               <button type="button" class="ghost-button" data-dec="${idx}">-</button>
@@ -1445,7 +1444,7 @@ async function generateReport(format, startDate, endDate) {
   const periodLabel = report.period_start ? report.period_start + " to " + report.period_end : "All time";
   output.innerHTML = `
     <table class="report-table">
-      <caption>${t("reports.summarySection")} (${periodLabel})</caption>
+      <caption>${t("reports.summarySection")} (${escapeHtml(periodLabel)})</caption>
       <tr><td>${t("stats.totalProducts")}</td><td>${report.summary.total_products}</td></tr>
       <tr><td>${t("stats.totalSales")}</td><td>${report.summary.total_sales}</td></tr>
       <tr><td>${t("stats.dailyRevenue")}</td><td>${money(report.summary.period_revenue)}</td></tr>
@@ -1455,7 +1454,7 @@ async function generateReport(format, startDate, endDate) {
       <caption>${t("reports.productsSection")}</caption>
       <thead><tr><th>${t("products.namePlaceholder")}</th><th>${t("products.stock")}</th><th>${t("products.buying")}</th><th>${t("products.selling")}</th><th>${t("products.profit")}</th><th>${t("table.status")}</th></tr></thead>
       <tbody>${report.products.map(p => `
-        <tr><td>${p.product_name}</td><td>${p.total_stock}</td><td>${money(p.buying_price)}</td><td>${money(p.selling_price)}</td><td>${money(p.profit_per_unit)}</td><td><span class="stock-badge ${p.stock_status === 'out_of_stock' ? 'danger' : p.stock_status === 'low_stock' ? 'warning' : ''}">${p.stock_status}</span></td></tr>
+        <tr><td>${escapeHtml(p.product_name)}</td><td>${p.total_stock}</td><td>${money(p.buying_price)}</td><td>${money(p.selling_price)}</td><td>${money(p.profit_per_unit)}</td><td><span class="stock-badge ${p.stock_status === 'out_of_stock' ? 'danger' : p.stock_status === 'low_stock' ? 'warning' : ''}">${escapeHtml(p.stock_status)}</span></td></tr>
       `).join("")}</tbody>
     </table>
     ${report.recent_sales.length ? `
@@ -1463,7 +1462,7 @@ async function generateReport(format, startDate, endDate) {
       <caption>${t("reports.recentSalesSection")}</caption>
       <thead><tr><th>${t("table.receipt")}</th><th>${t("table.amount")}</th><th>${t("table.profit")}</th><th>${t("common.today")}</th><th>${t("users.name")}</th></tr></thead>
       <tbody>${report.recent_sales.map(s => `
-        <tr><td>${s.receipt_number}</td><td>${money(s.total_amount)}</td><td>${money(s.total_profit)}</td><td>${s.sale_date}</td><td>${s.seller_name}</td></tr>
+        <tr><td>${escapeHtml(s.receipt_number)}</td><td>${money(s.total_amount)}</td><td>${money(s.total_profit)}</td><td>${escapeHtml(s.sale_date)}</td><td>${escapeHtml(s.seller_name)}</td></tr>
       `).join("")}</tbody>
     </table>` : ""}
   `;
@@ -1489,13 +1488,6 @@ function startDashboardAutoRefresh() {
   }, 30000);
 }
 
-function stopDashboardAutoRefresh() {
-  if (dashboardRefreshTimer) {
-    clearInterval(dashboardRefreshTimer);
-    dashboardRefreshTimer = null;
-  }
-}
-
 async function init() {
   console.log("[init] Starting app initialization...");
   try {
@@ -1511,20 +1503,11 @@ async function init() {
     }
     
     // Always do a fresh API call to check authentication and owner status
-    console.log("[init] Checking auth state via me.php...");
-    const response = await fetch("api/me.php", {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      cache: "no-store"  // Force fresh fetch from server
-    });
-    
     let payload;
     try {
-      payload = await response.json();
-      console.log("[init] me.php response:", payload);
-    } catch (jsonError) {
-      console.error("[init] JSON parse error from me.php:", jsonError);
+      payload = await apiRequest("api/me.php");
+    } catch (error) {
+      console.error("[init] Auth check failed:", error);
       showLogin(true);
       return;
     }

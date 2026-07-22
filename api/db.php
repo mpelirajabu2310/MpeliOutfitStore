@@ -198,19 +198,3 @@ function low_stock_threshold(PDO $pdo): int
     $settings = ensure_shop_settings($pdo);
     return max(1, (int)($settings['low_stock_threshold'] ?? 5));
 }
-
-function general_category_id(PDO $pdo): int
-{
-    $stmt = $pdo->prepare('SELECT id FROM categories WHERE name = :name LIMIT 1');
-    $stmt->execute(['name' => 'General']);
-    $id = $stmt->fetchColumn();
-
-    if ($id) {
-        return (int)$id;
-    }
-
-    $insert = $pdo->prepare('INSERT INTO categories (name) VALUES (:name)');
-    $insert->execute(['name' => 'General']);
-
-    return (int)$pdo->lastInsertId();
-}

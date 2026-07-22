@@ -3,18 +3,15 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/BaseService.php';
 require_once __DIR__ . '/InventoryService.php';
-require_once __DIR__ . '/ProfitService.php';
 
 class SalesService extends BaseService
 {
     private InventoryService $inventory;
-    private ProfitService $profit;
 
     public function __construct()
     {
         parent::__construct();
         $this->inventory = new InventoryService();
-        $this->profit = new ProfitService();
     }
 
     public function createSale(array $items, int $userId, string $paymentMethod = 'cash'): array

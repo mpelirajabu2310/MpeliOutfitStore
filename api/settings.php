@@ -47,6 +47,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if ($adminName === '') {
         respond(['success' => false, 'message' => 'Admin name is required.'], 422);
     }
+    if (strlen($shopName) > 100) {
+        respond(['success' => false, 'message' => 'Shop name must be 100 characters or fewer.'], 422);
+    }
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        respond(['success' => false, 'message' => 'Invalid shop email format.'], 422);
+    }
+    if ($adminEmail !== '' && !filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        respond(['success' => false, 'message' => 'Invalid admin email format.'], 422);
+    }
 
     $pdo->beginTransaction();
     try {

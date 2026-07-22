@@ -10,6 +10,9 @@
   --surface-alt: #f3f1ed;
   --text: #1d1a16;
   --text-secondary: #77716a;
+  --text-primary: #1d1a16;
+  --muted: #77716a;
+  --hover-bg: rgba(201,162,78,.08);
   --border: #e9e4da;
   --input-bg: #ffffff;
   --shadow: rgba(32,27,19,.07);
@@ -66,6 +69,9 @@ body.dark {
   --surface-alt: #27231f;
   --text: #f9f4e9;
   --text-secondary: #b8afa2;
+  --text-primary: #f9f4e9;
+  --muted: #b8afa2;
+  --hover-bg: rgba(201,162,78,.12);
   --border: #363029;
   --input-bg: #211e1a;
   --shadow: rgba(0,0,0,.25);
@@ -568,13 +574,6 @@ input:focus, select:focus {
   background: var(--chart-bg);
 }
 
-.bar-chart i {
-  height: var(--h);
-  min-height: 44px;
-  border-radius: 8px 8px 0 0;
-  background: var(--chart-bar);
-}
-
 .sales-chart-svg {
   grid-column: 1 / -1;
   width: 100%;
@@ -595,53 +594,6 @@ input:focus, select:focus {
   font-weight: 800;
   text-align: center;
 }
-
-.bar-h-44 { --h: 44%; }
-.bar-h-48 { --h: 48%; }
-.bar-h-58 { --h: 58%; }
-.bar-h-62 { --h: 62%; }
-.bar-h-70 { --h: 70%; }
-.bar-h-76 { --h: 76%; }
-.bar-h-88 { --h: 88%; }
-
-.visual-card {
-  position: relative;
-  overflow: hidden;
-  min-height: 292px;
-  padding: 0;
-  color: var(--white);
-}
-
-.visual-card img,
-.visual-placeholder {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  inset: 0;
-  object-fit: cover;
-}
-
-.visual-placeholder {
-  background: var(--visual-placeholder-bg);
-}
-
-.visual-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent, var(--visual-overlay));
-}
-
-.visual-card div {
-  position: absolute;
-  z-index: 1;
-  left: 20px;
-  right: 20px;
-  bottom: 20px;
-}
-
-.visual-card span { color: var(--gold); font-weight: 800; }
-.visual-card strong { display: block; margin-top: 8px; font-size: 22px; }
 
 .table-wrap { overflow-x: auto; }
 
@@ -906,10 +858,6 @@ th {
   stroke-linejoin: round;
 }
 
-.line-chart path {
-  fill: var(--chart-fill);
-}
-
 .best-sellers { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 
 .expense-form {
@@ -956,8 +904,6 @@ th {
 
 .stock-badge.warning { background: var(--badge-warning-bg); color: var(--badge-warning-text); }
 .stock-badge.danger { background: var(--badge-danger-bg); color: var(--badge-danger-text); }
-
-.charts-row { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
 
 .settings-actions {
   display: flex;

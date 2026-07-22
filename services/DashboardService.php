@@ -46,7 +46,6 @@ class DashboardService extends BaseService
         if ($isOwner) {
             $dailyProfit = $this->profit->calculateDailyProfit();
             $dailyBuyingCost = $this->profit->calculateDailyBuyingCost();
-            $dailyRevenue_ = $this->profit->calculateDailyRevenue();
             $monthlyProfit = $this->profit->calculateMonthlyProfit();
             $monthlyBuyingCost = $this->profit->calculateMonthlyBuyingCost();
             $yearlyProfit = $this->profit->calculateYearlyProfit();

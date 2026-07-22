@@ -7,6 +7,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
+$attempts = (int)($_SESSION['reset_attempts'] ?? 0);
+$lastAttempt = (int)($_SESSION['reset_last_attempt'] ?? 0);
+if ($attempts >= 5 && (time() - $lastAttempt) < 300) {
+    respond(['success' => false, 'message' => 'Too many reset attempts. Try again in 5 minutes.'], 429);
+}
+$_SESSION['reset_attempts'] = $attempts + 1;
+$_SESSION['reset_last_attempt'] = time();
+
 $data = read_json_body();
 $username = trim((string)($data['username'] ?? ''));
 $email = trim((string)($data['email'] ?? ''));
@@ -15,7 +23,12 @@ $password = (string)($data['password'] ?? '');
 if ($username === '' || $email === '' || $password === '') {
     respond(['success' => false, 'message' => 'Username, email, and password are required.'], 422);
 }
-
+if (strlen($username) > 50) {
+    respond(['success' => false, 'message' => 'Invalid username.'], 422);
+}
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respond(['success' => false, 'message' => 'Invalid email format.'], 422);
+}
 if (strlen($password) < 8) {
     respond(['success' => false, 'message' => 'Password must be at least 8 characters.'], 422);
 }

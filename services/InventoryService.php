@@ -99,13 +99,15 @@ class InventoryService extends BaseService
 
     public function getStockByStatus(string $status, ?int $threshold = null): int
     {
-        if ($threshold === null) {
-            $threshold = $this->getGlobalThreshold();
+        $allowed = ['low_stock', 'out_of_stock', 'in_stock'];
+        if (!in_array($status, $allowed, true)) {
+            return 0;
         }
-        $collate = 'COLLATE utf8mb4_unicode_ci';
-        return (int)$this->db->query(
-            "SELECT COUNT(*) FROM product_stock_summary WHERE stock_status {$collate} = '{$status}'"
-        )->fetchColumn();
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*) FROM product_stock_summary WHERE stock_status = :status'
+        );
+        $stmt->execute(['status' => $status]);
+        return (int)$stmt->fetchColumn();
     }
 
     public function getAllStockSummary(): array
