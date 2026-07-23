@@ -9,6 +9,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
+require_once __DIR__ . '/../services/PermissionService.php';
+PermissionService::requirePermission($user['role'], 'sales.create');
+
 require_csrf();
 
 $data = read_json_body();
@@ -26,6 +29,8 @@ $salesService = new SalesService();
 
 try {
     $result = $salesService->createSale($items, $user['id'], $paymentMethod);
+
+    log_activity((int)$user['id'], 'sale_completed', "Receipt: {$result['receipt_number']}, Amount: {$result['total_amount']}");
 
     respond([
         'success' => true,

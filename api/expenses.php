@@ -7,6 +7,7 @@ $user = require_login($pdo);
 $isOwner = $user['role'] === 'OWNER';
 
 require_once __DIR__ . '/../services/ExpenseService.php';
+require_once __DIR__ . '/../services/PermissionService.php';
 $expenseService = new ExpenseService();
 $CATEGORIES = $expenseService->getValidCategories();
 
@@ -31,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    PermissionService::requirePermission($user['role'], 'expenses.create');
     require_csrf();
     $data = read_json_body();
     $category = trim((string)($data['category'] ?? ''));
@@ -64,13 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user['id']
     );
 
+    log_activity((int)$user['id'], 'expense_created', "Category: {$category}, Amount: {$amount}, Date: {$expenseDate}");
     respond(['success' => true, 'message' => 'Expense recorded successfully.'], 201);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
-    if (!$isOwner) {
-        respond(['success' => false, 'message' => 'You do not have permission to perform this action.'], 403);
-    }
+    PermissionService::requirePermission($user['role'], 'expenses.update');
     require_csrf();
 
     $data = read_json_body();
@@ -84,6 +85,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if ($id <= 0) {
         respond(['success' => false, 'message' => 'Expense ID is required.'], 422);
     }
+
+    $expense = $expenseService->getExpenseById($id);
+    if (!$expense) {
+        respond(['success' => false, 'message' => 'Expense not found.'], 404);
+    }
+    require_ownership($pdo, (int)$expense['created_by'], $user);
+
     if ($category !== '' && !in_array($category, $CATEGORIES, true)) {
         respond(['success' => false, 'message' => 'Invalid expense category.'], 422);
     }
@@ -117,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
     try {
         $expenseService->updateExpense($id, $updateData);
+        log_activity((int)$user['id'], 'expense_updated', "Expense ID: {$id}");
         respond(['success' => true, 'message' => 'Expense updated successfully.']);
     } catch (RuntimeException $e) {
         respond(['success' => false, 'message' => $e->getMessage()], 404);
@@ -124,9 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-    if (!$isOwner) {
-        respond(['success' => false, 'message' => 'You do not have permission to perform this action.'], 403);
-    }
+    PermissionService::requirePermission($user['role'], 'expenses.delete');
     require_csrf();
 
     $data = read_json_body();
@@ -135,8 +142,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         respond(['success' => false, 'message' => 'Expense ID is required.'], 422);
     }
 
+    $expense = $expenseService->getExpenseById($id);
+    if (!$expense) {
+        respond(['success' => false, 'message' => 'Expense not found.'], 404);
+    }
+    require_ownership($pdo, (int)$expense['created_by'], $user);
+
     try {
         $expenseService->deleteExpense($id);
+        log_activity((int)$user['id'], 'expense_deleted', "Expense ID: {$id}");
         respond(['success' => true, 'message' => 'Expense deleted successfully.']);
     } catch (RuntimeException $e) {
         respond(['success' => false, 'message' => $e->getMessage()], 404);

@@ -873,6 +873,9 @@ document.querySelector("#loginForm")?.addEventListener("submit", async event => 
   event.preventDefault();
   const username = document.querySelector("#loginUsername").value.trim();
   const password = document.querySelector("#loginPassword").value;
+  const btn = document.querySelector("#loginForm button[type='submit']");
+  if (btn.classList.contains("btn-loading")) return;
+  btn.classList.add("btn-loading");
   try {
     const payload = await apiRequest("api/login.php", {
       method: "POST",
@@ -886,6 +889,8 @@ document.querySelector("#loginForm")?.addEventListener("submit", async event => 
     startDashboardAutoRefresh();
   } catch (error) {
     showToast(error.message, "error");
+  } finally {
+    btn.classList.remove("btn-loading");
   }
 });
 
@@ -1003,6 +1008,9 @@ document.querySelectorAll(".password-toggle").forEach(btn => {
 
 document.querySelector("#ownerSetupForm")?.addEventListener("submit", async event => {
   event.preventDefault();
+  const btn = document.querySelector("#ownerSetupForm button[type='submit']");
+  if (btn.classList.contains("btn-loading")) return;
+  btn.classList.add("btn-loading");
   try {
     const username = document.querySelector("#ownerUsername").value;
     const password = document.querySelector("#ownerPassword").value;
@@ -1046,6 +1054,8 @@ document.querySelector("#ownerSetupForm")?.addEventListener("submit", async even
     }
   } catch (error) {
     showToast(error.message, "error");
+  } finally {
+    btn.classList.remove("btn-loading");
   }
 });
 

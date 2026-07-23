@@ -7,7 +7,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
-require_role($pdo, ['OWNER']);
+$user = require_role($pdo, ['OWNER']);
+require_once __DIR__ . '/../services/PermissionService.php';
+PermissionService::requirePermission($user['role'], 'inventory.view');
 
 require_once __DIR__ . '/../services/InventoryService.php';
 $inventoryService = new InventoryService();

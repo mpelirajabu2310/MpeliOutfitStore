@@ -3,7 +3,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/db.php';
 
+require_once __DIR__ . '/../services/PermissionService.php';
+
 $owner = require_role($pdo, ['OWNER']);
+PermissionService::requirePermission($owner['role'], 'users.create');
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $stmt = $pdo->query(

@@ -22,7 +22,7 @@ $timestamp = time();
   <meta http-equiv="Expires" content="0" />
   <title data-i18n="app.title">mpeli Outfit Store | Clothing Shop Management</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <link rel="stylesheet" href="styles.css?t=<?php echo $timestamp; ?>" />
+  <link rel="stylesheet" href="styles.css?v=<?php echo $timestamp; ?>&bust=2" />
 </head>
 <body>
   <div class="splash-screen" id="splashScreen">
@@ -94,7 +94,7 @@ $timestamp = time();
             <button type="button" class="password-toggle" id="loginPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button>
           </div>
         </label>
-        <button type="submit" data-i18n="login.signIn"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+        <button type="submit" data-i18n="login.signIn"><i class="bi bi-box-arrow-in-right"></i> <span class="btn-text">Sign in</span><span class="btn-loading-text">Signing in...</span></button>
         <p class="login-recovery-hint"><a href="api/recover_owner.php" id="recoveryLink"><i class="bi bi-question-circle"></i> Lost access? Recovery</a></p>
       </form>
       <form class="login-card setup-card hidden" id="ownerSetupForm">
@@ -108,7 +108,7 @@ $timestamp = time();
         <label><span data-i18n="login.username">Username</span><div class="input-icon-wrap"><i class="bi bi-person"></i><input type="text" id="ownerUsername" autocomplete="username" /></div></label>
         <label><span data-i18n="users.email">Email</span><div class="input-icon-wrap"><i class="bi bi-envelope"></i><input type="email" id="ownerEmail" autocomplete="email" /></div></label>
         <label><span data-i18n="login.password">Password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="ownerPassword" autocomplete="new-password" /><button type="button" class="password-toggle" id="ownerPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
-        <button type="submit" data-i18n="auth.createOwnerButton"><i class="bi bi-person-plus-fill"></i> Create owner</button>
+        <button type="submit" data-i18n="auth.createOwnerButton"><i class="bi bi-person-plus-fill"></i> <span class="btn-text">Create owner</span><span class="btn-loading-text">Creating...</span></button>
       </form>
     </section>
   </main>
@@ -336,7 +336,7 @@ $timestamp = time();
             <input id="employeeName" placeholder="Name" data-i18n-placeholder="users.name" />
             <input id="employeeUsername" placeholder="Username" data-i18n-placeholder="login.username" />
             <input id="employeeEmail" type="email" placeholder="Email" data-i18n-placeholder="users.email" />
-            <input id="employeePassword" type="password" placeholder="Password" data-i18n-placeholder="login.password" />
+            <div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input id="employeePassword" type="password" placeholder="Password" data-i18n-placeholder="login.password" /><button type="button" class="password-toggle" id="employeePasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
             <input type="hidden" id="employeeRole" value="SELLER" />
             <p class="form-hint" data-i18n="users.sellerOnlyHint">New employees are registered as SELLER.</p>
             <button class="gold-button full" type="submit" data-i18n="users.createUser">Create user</button>
@@ -424,7 +424,7 @@ $timestamp = time();
             <label for="adminEmail" data-i18n="settings.adminEmail">Admin email</label>
             <input id="adminEmail" aria-label="Admin email" data-i18n-aria-label="settings.adminEmail" />
             <label for="adminPassword" data-i18n="settings.adminPassword">Admin password</label>
-            <input id="adminPassword" type="password" aria-label="Admin password" data-i18n-aria-label="settings.adminPassword" />
+            <div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input id="adminPassword" type="password" aria-label="Admin password" data-i18n-aria-label="settings.adminPassword" /><button type="button" class="password-toggle" id="adminPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
           </article>
           <article class="panel settings-card">
             <h3 data-i18n="settings.systemPreferences">System preferences</h3>
@@ -523,6 +523,6 @@ $timestamp = time();
     </div>
   </div>
 
-  <script src="script.js?t=<?php echo $timestamp; ?>"></script>
+  <script src="script.js?v=<?php echo $timestamp; ?>&bust=2"></script>
 </body>
 </html>

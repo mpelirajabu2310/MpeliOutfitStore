@@ -131,6 +131,7 @@ button { cursor: pointer; }
   display: grid;
   grid-template-columns: minmax(360px, 1.1fr) minmax(320px, .9fr);
   background: var(--black);
+  overflow: hidden;
 }
 
 .login-art {
@@ -142,8 +143,18 @@ button { cursor: pointer; }
   overflow: hidden;
   color: var(--white);
   background:
-    linear-gradient(90deg, var(--login-overlay), var(--login-overlay-light)),
-    url("images/img1.png") center/cover;
+    linear-gradient(135deg, rgba(17,16,14,.92) 0%, rgba(17,16,14,.72) 50%, rgba(17,16,14,.88) 100%),
+    url("images/img1.png") center/cover no-repeat;
+}
+
+.login-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(201,162,78,.12) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(201,162,78,.08) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .login-art-body {
@@ -152,6 +163,8 @@ button { cursor: pointer; }
   align-items: center;
   gap: 32px;
   max-width: 560px;
+  position: relative;
+  z-index: 1;
 }
 
 .login-art-text {
@@ -169,6 +182,8 @@ button { cursor: pointer; }
   color: var(--gold);
   font-family: Georgia, serif;
   font-size: 30px;
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(201,162,78,.15);
 }
 
 .eyebrow {
@@ -196,16 +211,37 @@ button { cursor: pointer; }
   display: grid;
   place-items: center;
   padding: 32px;
-  background: linear-gradient(180deg, var(--surface), var(--surface-alt));
+  background: linear-gradient(160deg, var(--surface) 0%, var(--surface-alt) 100%);
+  position: relative;
+}
+
+.login-panel::before {
+  content: "";
+  position: absolute;
+  top: -120px;
+  right: -120px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,162,78,.06) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 .login-card {
   width: min(420px, 100%);
-  padding: 34px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 40px 36px;
+  border: 1px solid var(--gold-border);
+  border-radius: 16px;
   background: var(--surface);
-  box-shadow: 0 24px 60px var(--shadow-heavy);
+  box-shadow: 0 8px 32px var(--shadow-heavy), 0 0 0 1px var(--gold-focus);
+  position: relative;
+  z-index: 1;
+  animation: loginCardIn .5s cubic-bezier(.23,1,.32,1) both;
+}
+
+@keyframes loginCardIn {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .login-logo-center {
@@ -215,13 +251,20 @@ button { cursor: pointer; }
 }
 
 .login-logo-circle {
-  width: 88px;
-  height: 88px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid var(--gold);
-  padding: 4px;
+  border: 2px solid var(--gold);
+  padding: 3px;
   background: var(--black);
+  box-shadow: 0 4px 20px rgba(201,162,78,.2);
+  transition: transform .3s ease, box-shadow .3s ease;
+}
+
+.login-logo-circle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 28px rgba(201,162,78,.3);
 }
 
 .login-shop-name {
@@ -255,19 +298,22 @@ button { cursor: pointer; }
 small { color: var(--text-secondary); }
 
 .login-card h2 {
-  margin: 34px 0 8px;
-  font-size: 32px;
+  margin: 24px 0 8px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .login-card p { color: var(--text-secondary); }
 
 label {
   display: grid;
-  gap: 8px;
-  margin-top: 18px;
+  gap: 6px;
+  margin-top: 16px;
   color: var(--label-color);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
+  letter-spacing: 0.01em;
   transition: color var(--theme-transition);
 }
 
@@ -285,48 +331,88 @@ label {
 
 input, select {
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
   padding: 12px 14px;
   color: var(--text);
   background: var(--input-bg);
   outline: none;
-  transition: color var(--theme-transition), background var(--theme-transition), border-color var(--theme-transition);
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  font-size: 15px;
+}
+
+input:hover, select:hover {
+  border-color: var(--gold-border);
 }
 
 input:focus, select:focus {
   border-color: var(--gold);
-  box-shadow: 0 0 0 3px var(--gold-focus);
+  box-shadow: 0 0 0 3px var(--gold-focus), 0 2px 8px rgba(201,162,78,.12);
 }
 
 .login-card button, .gold-button {
   border: 0;
-  border-radius: 8px;
-  padding: 12px 18px;
+  border-radius: 10px;
+  padding: 13px 18px;
   color: var(--button-text);
   background: var(--button-gradient);
   font-weight: 800;
-  box-shadow: 0 10px 22px var(--gold-shadow);
+  box-shadow: 0 4px 16px var(--gold-shadow);
+  transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease;
+}
+
+.login-card button:hover, .gold-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px var(--gold-shadow);
+}
+
+.login-card button:active, .gold-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px var(--gold-shadow);
 }
 
 .login-card button {
   width: 100%;
-  margin-top: 26px;
+  margin-top: 24px;
+  font-size: 15px;
+  letter-spacing: 0.01em;
 }
 .login-card button.password-toggle {
   width: auto;
 }
 
+.login-card button.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: .75;
+}
+
+.login-card button.btn-loading i.bi {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: splashSpin .6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+.login-card button.btn-loading .btn-text { display: none; }
+.login-card button.btn-loading .btn-loading-text { display: inline; }
+.login-card button:not(.btn-loading) .btn-loading-text { display: none; }
+
 .login-recovery-hint {
   text-align: center;
-  margin-top: 12px;
+  margin-top: 14px;
   font-size: 12px;
 }
 
 .login-recovery-hint a {
   color: var(--text-secondary);
   text-decoration: none;
-  transition: color .2s;
+  transition: color .2s ease;
 }
 
 .login-recovery-hint a:hover {
@@ -1522,21 +1608,28 @@ input:focus, select:focus, textarea:focus {
 
 .input-icon-wrap {
   position: relative;
+  border-radius: 10px;
 }
 
 .input-icon-wrap > i {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-secondary);
   font-size: 16px;
   pointer-events: none;
+  transition: color .2s ease;
+}
+
+.input-icon-wrap:focus-within > i {
+  color: var(--gold);
 }
 
 .input-icon-wrap input,
 .input-icon-wrap select {
-  padding-left: 36px;
+  padding-left: 40px;
+  border-radius: 10px;
 }
 
 /* Password toggle button */
@@ -1544,11 +1637,11 @@ input:focus, select:focus, textarea:focus {
   position: relative;
 }
 .password-wrap input {
-  padding-right: 40px;
+  padding-right: 44px;
 }
 .password-toggle {
   position: absolute;
-  right: 6px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
@@ -1556,14 +1649,15 @@ input:focus, select:focus, textarea:focus {
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 16px;
-  padding: 4px 6px;
+  padding: 6px 8px;
   line-height: 1;
-  border-radius: 4px;
-  transition: color .15s ease;
+  border-radius: 6px;
+  transition: color .2s ease, background .2s ease;
   z-index: 1;
 }
 .password-toggle:hover {
   color: var(--gold);
+  background: var(--gold-focus);
 }
 .password-toggle:focus-visible {
   outline: 2px solid var(--gold);
@@ -1692,9 +1786,9 @@ input:focus, select:focus, textarea:focus {
     padding: 14px 16px;
   }
 
-  .login-card { padding: 24px; }
-  .login-card h2 { font-size: 26px; margin-top: 24px; }
-  .login-card button { min-height: 48px; font-size: 16px; }
+  .login-card { padding: 28px; border-radius: 14px; }
+  .login-card h2 { font-size: 24px; margin-top: 20px; }
+  .login-card button { min-height: 48px; font-size: 15px; }
 
   .settings-card > label { font-size: 14px; }
 
@@ -1724,9 +1818,13 @@ input:focus, select:focus, textarea:focus {
 
 @media (max-width: 480px) {
   .login-art { display: none; }
-  .login-panel { padding: 16px; }
+  .login-panel {
+    padding: 20px 16px;
+    background: var(--surface);
+  }
+  .login-panel::before { display: none; }
   .login-shop-name { display: block; }
-  .login-card { padding: 20px; }
+  .login-card { padding: 24px 20px; border-radius: 12px; }
 
   .topbar { padding: 14px 16px; gap: 8px; }
   .page { padding: 16px; }
@@ -1754,9 +1852,9 @@ input:focus, select:focus, textarea:focus {
 
   .stat-card strong { font-size: 18px; }
 
-  .login-card { padding: 16px; border-radius: 6px; }
+  .login-card { padding: 20px; border-radius: 12px; }
   .login-card h2 { font-size: 22px; margin-top: 20px; }
-  .login-card button { min-height: 46px; }
+  .login-card button { min-height: 46px; font-size: 15px; }
 
   .sidebar { width: 260px; }
 }

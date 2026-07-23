@@ -45,8 +45,19 @@ if (!$user || !password_verify($password, (string)$user['password_hash'])) {
 // Reset rate limiter on success
 reset_rate_limit('login');
 
+// Maintenance mode: block non-OWNER logins
+if ($user['role'] !== 'OWNER') {
+    require_once __DIR__ . '/../services/SystemHealthService.php';
+    $healthService = new SystemHealthService();
+    if ($healthService->isMaintenanceMode()) {
+        log_activity((int)$user['id'], 'login_blocked_maintenance', "Role: {$user['role']}");
+        respond(['success' => false, 'message' => 'System is under maintenance. Please try again later.'], 503);
+    }
+}
+
 // Set session data, then regenerate ID to prevent session fixation
 $_SESSION['user_id'] = (int)$user['id'];
+$_SESSION['user_role'] = $user['role'];
 $_SESSION['last_activity'] = time();
 $_SESSION['login_ip'] = get_client_ip();
 session_regenerate_id(true);

@@ -182,7 +182,10 @@ function log_activity(int $userId, string $event, string $details = '', string $
 {
     $ip = get_client_ip();
     $timestamp = date('Y-m-d H:i:s');
-    $logLine = "[$timestamp] [user:$userId] [ip:$ip] [$event] [$status] $details" . PHP_EOL;
+    $role = $_SESSION['user_role'] ?? '';
+    $method = $_SERVER['REQUEST_METHOD'] ?? '';
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    $logLine = "[$timestamp] [user:$userId] [role:$role] [ip:$ip] [method:$method] [uri:$uri] [$event] [$status] $details" . PHP_EOL;
     $logDir = __DIR__ . '/../logs';
     if (!is_dir($logDir)) {
         @mkdir($logDir, 0750, true);
@@ -251,6 +254,17 @@ function require_role(PDO $pdo, array $roles): array
         respond(['success' => false, 'message' => 'You do not have permission to perform this action.'], 403);
     }
 
+    return $user;
+}
+
+function require_ownership(PDO $pdo, int $resourceUserId, ?array $user = null): array
+{
+    if ($user === null) {
+        $user = require_login($pdo);
+    }
+    if ($user['role'] !== 'OWNER' && (int)$user['id'] !== $resourceUserId) {
+        respond(['success' => false, 'message' => 'You can only access your own data.'], 403);
+    }
     return $user;
 }
 

@@ -5,6 +5,9 @@ require __DIR__ . '/db.php';
 
 $user = require_role($pdo, ['OWNER']);
 
+require_once __DIR__ . '/../services/PermissionService.php';
+PermissionService::requirePermission($user['role'], 'reports.generate');
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
@@ -34,6 +37,8 @@ $report = $reportService->generateFullReport(
     $endDate !== '' ? $endDate : null,
     $user['name']
 );
+
+log_activity((int)$user['id'], 'report_generated', "Format: {$format}, Period: {$startDate} to {$endDate}");
 
 if ($format === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');

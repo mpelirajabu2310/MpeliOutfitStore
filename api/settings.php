@@ -3,7 +3,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/db.php';
 
+require_once __DIR__ . '/../services/PermissionService.php';
+
 $owner = require_role($pdo, ['OWNER']);
+PermissionService::requirePermission($owner['role'], 'settings.update');
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $settings = ensure_shop_settings($pdo);

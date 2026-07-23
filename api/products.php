@@ -8,6 +8,7 @@ $isOwner = $user['role'] === 'OWNER';
 $threshold = low_stock_threshold($pdo);
 
 require_once __DIR__ . '/../services/ProductService.php';
+require_once __DIR__ . '/../services/PermissionService.php';
 $productService = new ProductService();
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
@@ -22,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $user = require_role($pdo, ['OWNER']);
+    PermissionService::requirePermission($user['role'], 'products.create');
     require_csrf();
     $data = read_json_body();
 
@@ -58,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newStock = (int)$existing['current_stock'] + $stock;
         try {
             $productService->updateDuplicateProduct($existingId, $buying, $selling, $minPrice, $newStock, $threshold);
+            log_activity((int)$user['id'], 'product_stock_updated', "Product: {$name} (duplicate merge), Stock: {$newStock}");
             respond(['success' => true, 'message' => 'Product already exists. Stock updated successfully.', 'product_id' => $existingId, 'updated' => true], 200);
         } catch (Throwable $exception) {
             error_log('[products] update error: ' . $exception->getMessage());
@@ -67,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $result = $productService->addProduct($name, $buying, $selling, $minPrice, $stock, $user['id'], $threshold);
+        log_activity((int)$user['id'], 'product_created', "Product: {$name}, ID: {$result['product_id']}");
         respond(['success' => true, 'message' => 'Product created successfully.', 'product_id' => $result['product_id']], 201);
     } catch (Throwable $exception) {
         error_log('[products] create error: ' . $exception->getMessage());
@@ -75,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
-    require_role($pdo, ['OWNER']);
+    PermissionService::requirePermission($user['role'], 'products.update');
     require_csrf();
     $data = read_json_body();
     $productId = (int)($data['id'] ?? 0);
@@ -112,6 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
                 $productService->updateVariantStock($variantId, $stock, $threshold);
             }
         }
+        log_activity((int)$user['id'], 'product_updated', "Product ID: {$productId}, Name: {$name}");
         respond(['success' => true, 'message' => 'Product updated successfully.']);
     } catch (Throwable $exception) {
         error_log('[products] update error: ' . $exception->getMessage());
@@ -120,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
-    require_role($pdo, ['OWNER']);
+    PermissionService::requirePermission($user['role'], 'products.delete');
     require_csrf();
     $data = read_json_body();
     $productId = (int)($data['id'] ?? 0);
@@ -128,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         respond(['success' => false, 'message' => 'Product id is required.'], 422);
     }
     $productService->deleteProduct($productId);
+    log_activity((int)$user['id'], 'product_deleted', "Product ID: {$productId}");
     respond(['success' => true, 'message' => 'Product deleted successfully.']);
 }
 
