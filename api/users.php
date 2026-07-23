@@ -15,6 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
+
     $data = read_json_body();
     $name = trim((string)($data['name'] ?? ''));
     $username = trim((string)($data['username'] ?? ''));
@@ -30,6 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (strlen($password) < 8) {
         respond(['success' => false, 'message' => 'Password must be at least 8 characters.'], 422);
+    }
+    if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+        respond(['success' => false, 'message' => 'Password must contain at least one letter and one number.'], 422);
     }
     if (strlen($name) > 100) {
         respond(['success' => false, 'message' => 'Name must be 100 characters or fewer.'], 422);
@@ -54,6 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'role' => $role,
         ]);
 
+        $newUserId = (int)$pdo->lastInsertId();
+        log_activity((int)$owner['id'], 'user_created', "Created user: $username (role: $role, id: $newUserId)");
+
         respond(['success' => true, 'message' => 'User created successfully.'], 201);
     } catch (PDOException $e) {
         if ($e->getCode() === '23000') {
@@ -65,6 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+    require_csrf();
+
     $data = read_json_body();
     $id = (int)($data['id'] ?? 0);
     $name = trim((string)($data['name'] ?? ''));
@@ -124,6 +134,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $sql .= ' WHERE id = :id';
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
+
+    log_activity((int)$owner['id'], 'user_updated', "Updated user ID: $id");
 
     respond(['success' => true, 'message' => 'User updated successfully.']);
 }

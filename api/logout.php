@@ -7,6 +7,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
+// Log before destroying session
+$userId = $_SESSION['user_id'] ?? 0;
+if ($userId) {
+    log_activity((int)$userId, 'logout');
+}
+
 // Clear session regardless of auth state (best-effort logout)
 $_SESSION = [];
 if (session_id()) {
@@ -26,5 +32,4 @@ if (ini_get('session.use_cookies')) {
     ]);
 }
 
-error_log('[logout] Session destroyed: ' . session_id());
 respond(['success' => true, 'message' => 'Logged out successfully.']);

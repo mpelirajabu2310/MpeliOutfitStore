@@ -9,6 +9,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
+require_csrf();
+
 $data = read_json_body();
 $items = $data['items'] ?? [];
 if (!is_array($items)) {

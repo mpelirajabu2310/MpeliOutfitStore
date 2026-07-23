@@ -11,14 +11,14 @@ if (owner_exists($pdo)) {
     respond(['success' => false, 'message' => 'Owner account already exists. Ask the owner to create employee accounts.'], 403);
 }
 
-// Rate limiting
-$attempts = (int)($_SESSION['register_attempts'] ?? 0);
-$lastAttempt = (int)($_SESSION['register_last_attempt'] ?? 0);
-if ($attempts >= 3 && (time() - $lastAttempt) < 300) {
+// CSRF not required for first-owner registration (no session auth yet)
+
+// IP-based rate limiting: 3 attempts per 5 minutes
+if (!check_rate_limit('register', 3, 300)) {
+    $ip = get_client_ip();
+    log_activity(0, 'register_blocked', "IP: $ip — too many attempts", 'blocked');
     respond(['success' => false, 'message' => 'Too many registration attempts. Try again in 5 minutes.'], 429);
 }
-$_SESSION['register_attempts'] = $attempts + 1;
-$_SESSION['register_last_attempt'] = time();
 
 $data = read_json_body();
 $name = trim((string)($data['name'] ?? ''));
@@ -47,6 +47,13 @@ if (strlen($password) < 8) {
     respond(['success' => false, 'message' => 'Password must be at least 8 characters.'], 422);
 }
 
+// Password strength: require at least one letter and one number
+if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+    respond(['success' => false, 'message' => 'Password must contain at least one letter and one number.'], 422);
+}
+
+reset_rate_limit('register');
+
 try {
     $stmt = $pdo->prepare(
         'INSERT INTO users (name, username, email, password_hash, role, status)
@@ -58,6 +65,9 @@ try {
         'email' => $email !== '' ? $email : null,
         'password_hash' => password_hash($password, PASSWORD_DEFAULT),
     ]);
+
+    $newUserId = (int)$pdo->lastInsertId();
+    log_activity($newUserId, 'owner_registered', "Username: $username");
 
     respond(['success' => true, 'message' => 'Owner account created. You can now log in.'], 201);
 } catch (PDOException $e) {

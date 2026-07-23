@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = require_role($pdo, ['OWNER']);
+    require_csrf();
     $data = read_json_body();
 
     $name = trim((string)($data['name'] ?? ''));
@@ -75,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     require_role($pdo, ['OWNER']);
+    require_csrf();
     $data = read_json_body();
     $productId = (int)($data['id'] ?? 0);
     $name = trim((string)($data['name'] ?? ''));
@@ -119,6 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     require_role($pdo, ['OWNER']);
+    require_csrf();
     $data = read_json_body();
     $productId = (int)($data['id'] ?? 0);
     if ($productId <= 0) {

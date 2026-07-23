@@ -7,53 +7,56 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
-$attempts = (int)($_SESSION['reset_attempts'] ?? 0);
-$lastAttempt = (int)($_SESSION['reset_last_attempt'] ?? 0);
-if ($attempts >= 5 && (time() - $lastAttempt) < 300) {
-    respond(['success' => false, 'message' => 'Too many reset attempts. Try again in 5 minutes.'], 429);
-}
-$_SESSION['reset_attempts'] = $attempts + 1;
-$_SESSION['reset_last_attempt'] = time();
+// Must be authenticated to change password
+$user = require_login($pdo);
+
+// CSRF protection required
+require_csrf();
 
 $data = read_json_body();
-$username = trim((string)($data['username'] ?? ''));
-$email = trim((string)($data['email'] ?? ''));
-$password = (string)($data['password'] ?? '');
+$currentPassword = (string)($data['current_password'] ?? '');
+$newPassword = (string)($data['new_password'] ?? '');
 
-if ($username === '' || $email === '' || $password === '') {
-    respond(['success' => false, 'message' => 'Username, email, and password are required.'], 422);
-}
-if (strlen($username) > 50) {
-    respond(['success' => false, 'message' => 'Invalid username.'], 422);
-}
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    respond(['success' => false, 'message' => 'Invalid email format.'], 422);
-}
-if (strlen($password) < 8) {
-    respond(['success' => false, 'message' => 'Password must be at least 8 characters.'], 422);
+if ($currentPassword === '' || $newPassword === '') {
+    respond(['success' => false, 'message' => 'Current password and new password are required.'], 422);
 }
 
-$stmt = $pdo->prepare(
-    'SELECT id, email FROM users WHERE username = :username AND status = "active" LIMIT 1'
-);
-$stmt->execute(['username' => $username]);
-$user = $stmt->fetch();
+// Verify current password first
+$stmt = $pdo->prepare('SELECT password_hash FROM users WHERE id = :id LIMIT 1');
+$stmt->execute(['id' => $user['id']]);
+$record = $stmt->fetch();
 
-if (!$user || strtolower((string)$user['email']) !== strtolower($email)) {
-    respond(['success' => false, 'message' => 'Username and email do not match our records.'], 422);
+if (!$record || !password_verify($currentPassword, (string)$record['password_hash'])) {
+    log_activity((int)$user['id'], 'password_change_failed', 'Current password incorrect', 'failure');
+    respond(['success' => false, 'message' => 'Current password is incorrect.'], 401);
+}
+
+if (strlen($newPassword) < 8) {
+    respond(['success' => false, 'message' => 'New password must be at least 8 characters.'], 422);
+}
+
+// Password strength: require at least one letter and one number
+if (!preg_match('/[A-Za-z]/', $newPassword) || !preg_match('/[0-9]/', $newPassword)) {
+    respond(['success' => false, 'message' => 'New password must contain at least one letter and one number.'], 422);
+}
+
+// Prevent reuse of current password
+if (password_verify($newPassword, (string)$record['password_hash'])) {
+    respond(['success' => false, 'message' => 'New password must be different from the current password.'], 422);
 }
 
 $update = $pdo->prepare('UPDATE users SET password_hash = :hash WHERE id = :id');
 $update->execute([
-    'hash' => password_hash($password, PASSWORD_DEFAULT),
+    'hash' => password_hash($newPassword, PASSWORD_DEFAULT),
     'id' => $user['id'],
 ]);
 
-unset($_SESSION['reset_attempts'], $_SESSION['reset_last_attempt']);
-unset($_SESSION['login_attempts'], $_SESSION['login_last_attempt']);
+// Regenerate session after password change
+session_regenerate_id(true);
+
+log_activity((int)$user['id'], 'password_changed');
 
 respond([
     'success' => true,
-    'message' => 'Password reset successfully. You can now log in.',
-    'username' => $username,
+    'message' => 'Password changed successfully.',
 ]);

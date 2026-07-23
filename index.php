@@ -4,6 +4,12 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 header('Content-Type: text/html; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('X-XSS-Protection: 1; mode=block');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';");
 
 $timestamp = time();
 ?><!DOCTYPE html>
@@ -15,9 +21,17 @@ $timestamp = time();
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title data-i18n="app.title">mpeli Outfit Store | Clothing Shop Management</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="styles.css?t=<?php echo $timestamp; ?>" />
 </head>
 <body>
+  <div class="splash-screen" id="splashScreen">
+    <div class="splash-content">
+      <img src="images/logo.png" alt="Mpeli Outfit Store" class="splash-logo">
+      <div class="splash-loader"></div>
+      <p class="splash-text">Loading...</p>
+    </div>
+  </div>
   <main class="login-screen" id="loginScreen">
     <section class="login-art" aria-label="Boutique preview" data-i18n-aria-label="aria.boutiquePreview">
       <div class="login-art-body">
@@ -35,6 +49,7 @@ $timestamp = time();
         <div class="login-logo-center">
           <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
         </div>
+        <p class="login-shop-name">Mpeli Outfit Store</p>
         <label class="language-field">
           <span data-i18n="settings.language">Language</span>
           <select class="language-switcher" id="loginLanguageSwitcher" aria-label="Language" data-i18n-aria-label="settings.language">
@@ -46,26 +61,33 @@ $timestamp = time();
         <p data-i18n="login.subtitle">Sign in to manage products, sales, inventory, and boutique reports.</p>
         <label>
           <span data-i18n="login.username">Username</span>
-          <input type="text" id="loginUsername" autocomplete="username" />
+          <div class="input-icon-wrap">
+            <i class="bi bi-person"></i>
+            <input type="text" id="loginUsername" autocomplete="username" />
+          </div>
         </label>
         <label>
           <span data-i18n="login.password">Password</span>
-          <input type="password" id="loginPassword" autocomplete="current-password" />
+          <div class="input-icon-wrap password-wrap">
+            <i class="bi bi-lock"></i>
+            <input type="password" id="loginPassword" autocomplete="current-password" />
+            <button type="button" class="password-toggle" id="loginPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button>
+          </div>
         </label>
-        <button type="submit" data-i18n="login.signIn">Sign in</button>
-        <button type="button" class="link-button" id="forgotPasswordLink" data-i18n="login.forgotPassword">Forgot password?</button>
+        <button type="submit" data-i18n="login.signIn"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
       </form>
       <form class="login-card setup-card hidden" id="ownerSetupForm">
         <div class="login-logo-center">
           <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
         </div>
+        <p class="login-shop-name">Mpeli Outfit Store</p>
         <h2 data-i18n="auth.createOwner">Create owner account</h2>
         <p data-i18n="auth.createOwnerText">No owner exists yet. Create the first OWNER account to start using the system.</p>
-        <label><span data-i18n="users.name">Name</span><input type="text" id="ownerName" autocomplete="name" /></label>
-        <label><span data-i18n="login.username">Username</span><input type="text" id="ownerUsername" autocomplete="username" /></label>
-        <label><span data-i18n="users.email">Email</span><input type="email" id="ownerEmail" autocomplete="email" /></label>
-        <label><span data-i18n="login.password">Password</span><input type="password" id="ownerPassword" autocomplete="new-password" /></label>
-        <button type="submit" data-i18n="auth.createOwnerButton">Create owner</button>
+        <label><span data-i18n="users.name">Name</span><div class="input-icon-wrap"><i class="bi bi-person-badge"></i><input type="text" id="ownerName" autocomplete="name" /></div></label>
+        <label><span data-i18n="login.username">Username</span><div class="input-icon-wrap"><i class="bi bi-person"></i><input type="text" id="ownerUsername" autocomplete="username" /></div></label>
+        <label><span data-i18n="users.email">Email</span><div class="input-icon-wrap"><i class="bi bi-envelope"></i><input type="email" id="ownerEmail" autocomplete="email" /></div></label>
+        <label><span data-i18n="login.password">Password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="ownerPassword" autocomplete="new-password" /><button type="button" class="password-toggle" id="ownerPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
+        <button type="submit" data-i18n="auth.createOwnerButton"><i class="bi bi-person-plus-fill"></i> Create owner</button>
       </form>
     </section>
   </main>
@@ -77,14 +99,14 @@ $timestamp = time();
         <span class="sidebar-title">Mpeli Outfit Store</span>
       </div>
       <nav class="side-nav" aria-label="Main navigation" data-i18n-aria-label="aria.mainNavigation">
-        <button class="nav-item active" data-page="dashboard" data-i18n="nav.dashboard">Dashboard</button>
-        <button class="nav-item" data-page="products" data-i18n="nav.products">Products</button>
-        <button class="nav-item" data-page="sales" data-i18n="nav.sales">Sales POS</button>
-        <button class="nav-item owner-only" data-page="inventory" data-i18n="nav.inventory">Inventory</button>
-        <button class="nav-item owner-only" data-page="reports" data-i18n="nav.reports">Reports</button>
-        <button class="nav-item" data-page="expenses" data-i18n="nav.expenses">Expenses</button>
-        <button class="nav-item owner-only" data-page="users" data-i18n="nav.users">Users</button>
-        <button class="nav-item owner-only" data-page="settings" data-i18n="nav.settings">Settings</button>
+        <button class="nav-item active" data-page="dashboard" data-i18n="nav.dashboard"><i class="bi bi-grid-1x2-fill"></i> Dashboard</button>
+        <button class="nav-item" data-page="products" data-i18n="nav.products"><i class="bi bi-box-seam-fill"></i> Products</button>
+        <button class="nav-item" data-page="sales" data-i18n="nav.sales"><i class="bi bi-cart-check-fill"></i> Sales POS</button>
+        <button class="nav-item owner-only" data-page="inventory" data-i18n="nav.inventory"><i class="bi bi-clipboard-data-fill"></i> Inventory</button>
+        <button class="nav-item owner-only" data-page="reports" data-i18n="nav.reports"><i class="bi bi-bar-chart-line-fill"></i> Reports</button>
+        <button class="nav-item" data-page="expenses" data-i18n="nav.expenses"><i class="bi bi-wallet2"></i> Expenses</button>
+        <button class="nav-item owner-only" data-page="users" data-i18n="nav.users"><i class="bi bi-people-fill"></i> Users</button>
+        <button class="nav-item owner-only" data-page="settings" data-i18n="nav.settings"><i class="bi bi-gear-fill"></i> Settings</button>
       </nav>
       <div class="sidebar-feature owner-only">
         <span data-i18n="sidebar.drop">Operations</span>
@@ -95,14 +117,14 @@ $timestamp = time();
 
     <section class="workspace">
       <header class="topbar">
-        <button class="menu-button" id="menuButton" aria-label="Toggle menu" data-i18n-aria-label="aria.toggleMenu"><span class="hamburger-icon" aria-hidden="true">&#9776;</span></button>
+        <button class="menu-button" id="menuButton" aria-label="Toggle menu" data-i18n-aria-label="aria.toggleMenu"><i class="bi bi-list hamburger-icon" aria-hidden="true"></i></button>
         <div class="search-box">
           <span data-i18n="common.search">Search</span>
           <input type="search" placeholder="Products, receipts, expenses..." id="globalSearch" data-i18n-placeholder="search.globalPlaceholder" />
-          <button type="button" class="search-icon-btn" id="searchIconBtn" aria-label="Search">&#x1F50D;</button>
+          <button type="button" class="search-icon-btn" id="searchIconBtn" aria-label="Search"><i class="bi bi-search"></i></button>
         </div>
         <select class="language-switcher" id="appLanguageSwitcher" aria-label="Language" data-i18n-aria-label="settings.language"></select>
-        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">&#x1F319;</button>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme"><i class="bi bi-moon-stars"></i></button>
         <div class="admin-profile">
           <span id="profileAvatar" class="profile-avatar">--</span>
           <div>
@@ -110,7 +132,8 @@ $timestamp = time();
             <small id="profileRole" class="role-badge"></small>
           </div>
         </div>
-        <button id="logoutButton" class="logout-button" data-i18n="nav.logout">Logout</button>
+        <button id="changePasswordButton" class="ghost-button" aria-label="Change password" title="Change password"><i class="bi bi-key"></i></button>
+        <button id="logoutButton" class="logout-button" data-i18n="nav.logout"><i class="bi bi-box-arrow-left"></i> Logout</button>
       </header>
       <main class="page active" id="dashboard">
         <div class="page-heading">
@@ -180,7 +203,7 @@ $timestamp = time();
           <input id="productSellingInput" type="number" min="0" step="1" placeholder="Selling price (TSH)" data-i18n-placeholder="products.selling" required />
           <input id="productMinPriceInput" type="number" min="0" step="1" placeholder="Min allowed selling price (TSH)" title="Minimum Allowed Selling Price" required />
           <input id="productStockInput" type="number" min="0" step="1" placeholder="Stock quantity" data-i18n-placeholder="products.stock" />
-          <button class="gold-button" type="submit" data-i18n="products.saveProduct">Save product</button>
+          <button class="gold-button" type="submit" data-i18n="products.saveProduct"><i class="bi bi-check-circle-fill"></i> Save product</button>
         </form>
         <div class="toolbar">
           <input type="search" id="productSearch" placeholder="Search products..." data-i18n-placeholder="products.searchPlaceholder" />
@@ -190,7 +213,7 @@ $timestamp = time();
       <main class="page" id="sales">
         <div class="page-heading">
           <div><p class="eyebrow" data-i18n="sales.eyebrow">Point of Sale</p><h2 data-i18n="sales.title">Sales Management</h2></div>
-          <button class="gold-button" id="receiptButton" data-i18n="sales.generateReceipt">Generate receipt</button>
+          <button class="gold-button" id="receiptButton" data-i18n="sales.generateReceipt"><i class="bi bi-receipt"></i> Generate receipt</button>
         </div>
         <section class="pos-layout">
           <article class="panel">
@@ -227,7 +250,7 @@ $timestamp = time();
       <main class="page owner-only" id="reports">
         <div class="page-heading">
           <div><p class="eyebrow" data-i18n="reports.eyebrow">Performance Intelligence</p><h2 data-i18n="reports.title">Reports and Analytics</h2></div>
-          <button class="gold-button" id="generateReportReportsButton" data-i18n="reports.generateReport">Generate Report</button>
+          <button class="gold-button" id="generateReportReportsButton" data-i18n="reports.generateReport"><i class="bi bi-file-earmark-bar-graph"></i> Generate Report</button>
         </div>
         <section class="report-grid">
           <article class="panel"><h3 data-i18n="reports.dailySales">Daily Sales</h3><strong id="reportDailySales">TSH 0</strong><p id="reportDailyNote" class="report-note" data-i18n="dashboard.noChartData">No sales data available yet.</p></article>
@@ -311,7 +334,7 @@ $timestamp = time();
       <main class="page" id="expenses">
         <div class="page-heading">
           <div><p class="eyebrow" data-i18n="expenses.eyebrow">Cost Tracking</p><h2 data-i18n="nav.expenses">Expenses</h2></div>
-          <button class="gold-button" id="toggleExpenseForm" data-i18n="expenses.recordExpense">Record expense</button>
+          <button class="gold-button" id="toggleExpenseForm" data-i18n="expenses.recordExpense"><i class="bi bi-plus-circle-fill"></i> Record expense</button>
         </div>
         <section class="expense-layout">
           <article class="panel expense-form hidden" id="expenseFormPanel">
@@ -395,7 +418,7 @@ $timestamp = time();
         </section>
         <div class="settings-actions">
           <p class="form-hint" id="settingsMessage" role="status"></p>
-          <button class="gold-button" type="button" id="saveSettingsButton" data-i18n="settings.saveSettings">Save settings</button>
+          <button class="gold-button" type="button" id="saveSettingsButton" data-i18n="settings.saveSettings"><i class="bi bi-save-fill"></i> Save settings</button>
         </div>
       </main>
     </section>
@@ -417,32 +440,31 @@ $timestamp = time();
       </div>
       <div class="modal-actions">
         <button type="button" class="ghost-button" id="reportDateCancel">Cancel</button>
-        <button type="button" class="gold-button" id="reportDateConfirm">Generate</button>
+        <button type="button" class="gold-button" id="reportDateConfirm"><i class="bi bi-check-lg"></i> Generate</button>
       </div>
     </div>
   </div>
 
-  <!-- Reset password modal -->
+  <!-- Change password modal -->
   <div class="modal-overlay hidden" id="resetPasswordModal">
     <div class="reset-dialog">
-      <button type="button" class="reset-close" id="resetPasswordClose">&times;</button>
+      <button type="button" class="reset-close" id="resetPasswordClose"><i class="bi bi-x-lg"></i></button>
       <div class="logo-lockup" style="margin-bottom:20px">
-        <span class="logo">MM</span>
+        <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle" style="width:48px;height:48px">
         <div>
           <strong>Mpeli Outfit Store</strong>
-          <small data-i18n="auth.passwordRecovery">Password Recovery</small>
+          <small data-i18n="auth.passwordRecovery">Change Password</small>
         </div>
       </div>
-      <h3 data-i18n="auth.resetPasswordTitle">Reset your password</h3>
-      <p class="reset-info" data-i18n="auth.resetPasswordInfo">Enter your username and the email you registered with. We'll verify your identity so you can set a new password.</p>
+      <h3 data-i18n="auth.resetPasswordTitle">Change your password</h3>
+      <p class="reset-info" data-i18n="auth.changePasswordInfo">Enter your current password and choose a new one.</p>
       <form id="resetPasswordForm">
-        <label><span data-i18n="login.username">Username</span><input type="text" id="resetUsername" required /></label>
-        <label><span data-i18n="users.email">Email</span><input type="email" id="resetEmail" required /></label>
-        <label><span data-i18n="login.newPassword">New password</span><input type="password" id="resetNewPassword" minlength="8" required /></label>
-        <label><span data-i18n="login.confirmNewPassword">Confirm new password</span><input type="password" id="resetConfirmPassword" minlength="8" required /></label>
+        <label><span data-i18n="login.currentPassword">Current password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetCurrentPassword" required /><button type="button" class="password-toggle" id="resetCurrentPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
+        <label><span data-i18n="login.newPassword">New password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetNewPassword" minlength="8" required /><button type="button" class="password-toggle" id="resetNewPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
+        <label><span data-i18n="login.confirmNewPassword">Confirm new password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetConfirmPassword" minlength="8" required /><button type="button" class="password-toggle" id="resetConfirmPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
         <div class="reset-actions">
           <button type="button" class="ghost-button" id="resetPasswordCancel" data-i18n="common.cancel">Cancel</button>
-          <button type="submit" class="gold-button" data-i18n="auth.resetPassword">Reset Password</button>
+          <button type="submit" class="gold-button" data-i18n="auth.changePassword"><i class="bi bi-key"></i> Change Password</button>
         </div>
       </form>
     </div>

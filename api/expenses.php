@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $data = read_json_body();
     $category = trim((string)($data['category'] ?? ''));
     $expenseName = trim((string)($data['expense_name'] ?? ''));
@@ -70,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if (!$isOwner) {
         respond(['success' => false, 'message' => 'You do not have permission to perform this action.'], 403);
     }
+    require_csrf();
 
     $data = read_json_body();
     $id = (int)($data['id'] ?? 0);
@@ -125,6 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
     if (!$isOwner) {
         respond(['success' => false, 'message' => 'You do not have permission to perform this action.'], 403);
     }
+    require_csrf();
 
     $data = read_json_body();
     $id = (int)($data['id'] ?? 0);

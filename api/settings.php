@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+    require_csrf();
     $data = read_json_body();
     $settings = ensure_shop_settings($pdo);
     $settingsId = (int)$settings['id'];

@@ -43,7 +43,7 @@ function setTheme(theme) {
   document.body.classList.toggle("dark", theme === "dark");
   localStorage.setItem(STORAGE_THEME_KEY, theme);
   const btn = document.querySelector("#themeToggle");
-  if (btn) btn.innerHTML = theme === "dark" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+  if (btn) btn.innerHTML = theme === "dark" ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-stars"></i>';
 }
 function toggleTheme() {
   setTheme(document.body.classList.contains("dark") ? "light" : "dark");
@@ -57,17 +57,39 @@ const money = value => {
 };
 
 let lowStockThreshold = 5;
+let csrfToken = localStorage.getItem("csrf_token") || "";
+
+function storeCsrfToken(token) {
+  if (token) {
+    csrfToken = token;
+    localStorage.setItem("csrf_token", token);
+  }
+}
+
+function clearCsrfToken() {
+  csrfToken = "";
+  localStorage.removeItem("csrf_token");
+}
 
 async function apiRequest(url, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  const needsCsrf = ["POST", "PUT", "DELETE"].includes(method);
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  if (needsCsrf && csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
+
   try {
     const response = await fetch(url, {
-      headers: { 
-        "Content-Type": "application/json",
-        ...(options.headers || {})
-      },
+      ...options,
+      method,
+      headers,
       credentials: "same-origin",
-      cache: "no-store",  // Never cache API responses
-      ...options
+      cache: "no-store",
     });
     
     let payload;
@@ -76,6 +98,11 @@ async function apiRequest(url, options = {}) {
     } catch (jsonError) {
       console.error("JSON parse error from", url, ":", jsonError);
       throw new Error("Invalid response from server. Please try again.");
+    }
+
+    // Update CSRF token from any successful response
+    if (payload.csrf_token) {
+      storeCsrfToken(payload.csrf_token);
     }
     
     if (!response.ok || payload.success === false) {
@@ -798,6 +825,7 @@ document.querySelector("#loginForm")?.addEventListener("submit", async event => 
       method: "POST",
       body: JSON.stringify({ username, password })
     });
+    if (payload.csrf_token) storeCsrfToken(payload.csrf_token);
     currentUser = payload.user;
     showApp();
     showToast(t("login.welcome") + ", " + currentUser.name + "!");
@@ -808,8 +836,8 @@ document.querySelector("#loginForm")?.addEventListener("submit", async event => 
   }
 });
 
-// Forgot / reset password
-document.querySelector("#forgotPasswordLink")?.addEventListener("click", () => {
+// Change password modal (authenticated users)
+document.querySelector("#changePasswordButton")?.addEventListener("click", () => {
   document.querySelector("#resetPasswordModal").classList.remove("hidden");
 });
 
@@ -826,8 +854,7 @@ document.querySelector("#resetPasswordModal")?.addEventListener("click", e => {
 
 document.querySelector("#resetPasswordForm")?.addEventListener("submit", async event => {
   event.preventDefault();
-  const username = document.querySelector("#resetUsername").value.trim();
-  const email = document.querySelector("#resetEmail").value.trim();
+  const currentPassword = document.querySelector("#resetCurrentPassword").value;
   const password = document.querySelector("#resetNewPassword").value;
   const confirm = document.querySelector("#resetConfirmPassword").value;
 
@@ -836,32 +863,36 @@ document.querySelector("#resetPasswordForm")?.addEventListener("submit", async e
     return;
   }
 
+  if (password === currentPassword) {
+    showToast(t("auth.samePassword"), "error");
+    return;
+  }
+
   try {
     await apiRequest("api/reset_password.php", {
       method: "POST",
-      body: JSON.stringify({ username, email, password })
+      body: JSON.stringify({ current_password: currentPassword, new_password: password })
     });
-    showToast(t("auth.passwordResetSuccess"));
+    showToast(t("auth.passwordChanged"));
     closeResetPasswordModal();
-
-    try {
-      const loginPayload = await apiRequest("api/login.php", {
-        method: "POST",
-        body: JSON.stringify({ username, password })
-      });
-      currentUser = loginPayload.user;
-      showApp();
-      showToast(t("login.welcome") + ", " + currentUser.name + "!");
-      await refreshAppData();
-      startDashboardAutoRefresh();
-    } catch (loginError) {
-      showLogin(true);
-      document.querySelector("#loginUsername").value = username;
-      showToast(t("auth.autoLoginFailed"), "error");
-    }
   } catch (error) {
     showToast(error.message, "error");
   }
+});
+
+// Password toggle functionality
+document.querySelectorAll(".password-toggle").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const input = btn.parentElement.querySelector("input");
+    if (!input) return;
+    const isPassword = input.type === "password";
+    input.type = isPassword ? "text" : "password";
+    const icon = btn.querySelector("i");
+    if (icon) {
+      icon.className = isPassword ? "bi bi-eye-slash" : "bi bi-eye";
+    }
+    btn.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
+  });
 });
 
 document.querySelector("#ownerSetupForm")?.addEventListener("submit", async event => {
@@ -884,13 +915,14 @@ document.querySelector("#ownerSetupForm")?.addEventListener("submit", async even
     
     // Try to auto-login
     try {
-      await apiRequest("api/login.php", {
+      const loginPayload = await apiRequest("api/login.php", {
         method: "POST",
         body: JSON.stringify({
           username: username,
           password: password
         })
       });
+      if (loginPayload.csrf_token) storeCsrfToken(loginPayload.csrf_token);
       
       // Refresh auth state
       const payload = await apiRequest("api/me.php");
@@ -903,7 +935,6 @@ document.querySelector("#ownerSetupForm")?.addEventListener("submit", async even
         showLogin(true);
       }
     } catch (loginError) {
-      // Auto-login failed, show login form
       showLogin(true);
       document.querySelector("#loginUsername").value = username;
     }
@@ -981,6 +1012,7 @@ document.querySelector("#logoutButton")?.addEventListener("click", async () => {
   products = [];
   cart.clear();
   discountPrices.clear();
+  clearCsrfToken();
   showLogin(true);
 });
 
@@ -1575,6 +1607,12 @@ async function init() {
   } catch (error) {
     console.error("[init] Initialization error:", error);
     showLogin(true);
+  } finally {
+    const splash = document.querySelector("#splashScreen");
+    if (splash) {
+      splash.classList.add("fade-out");
+      setTimeout(() => splash.remove(), 500);
+    }
   }
 }
 

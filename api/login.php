@@ -15,10 +15,15 @@ if ($username === '' || $password === '') {
     respond(['success' => false, 'message' => 'Username and password are required.'], 422);
 }
 
-// Rate limiting: prevent brute-force attacks
-$attempts = (int)($_SESSION['login_attempts'] ?? 0);
-$lastAttempt = (int)($_SESSION['login_last_attempt'] ?? 0);
-if ($attempts >= 5 && (time() - $lastAttempt) < 300) {
+// Input validation: username format
+if (strlen($username) > 50 || !preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
+    respond(['success' => false, 'message' => 'Invalid username format.'], 422);
+}
+
+// IP-based rate limiting: 5 attempts per 5 minutes
+if (!check_rate_limit('login', 5, 300)) {
+    $ip = get_client_ip();
+    log_activity(0, 'login_blocked', "IP: $ip — too many attempts", 'blocked');
     respond(['success' => false, 'message' => 'Too many login attempts. Try again in 5 minutes.'], 429);
 }
 
@@ -31,19 +36,22 @@ $stmt = $pdo->prepare(
 $stmt->execute(['username' => $username]);
 $user = $stmt->fetch();
 
+// Use constant-time comparison for password hash verification
 if (!$user || !password_verify($password, (string)$user['password_hash'])) {
-    $_SESSION['login_attempts'] = $attempts + 1;
-    $_SESSION['login_last_attempt'] = time();
+    log_activity($user['id'] ?? 0, 'login_failed', "Username: $username", 'failure');
     respond(['success' => false, 'message' => 'Invalid username or password.'], 401);
 }
 
 // Reset rate limiter on success
-unset($_SESSION['login_attempts'], $_SESSION['login_last_attempt']);
+reset_rate_limit('login');
 
-// Set session data first, THEN regenerate ID to ensure data is preserved
+// Set session data, then regenerate ID to prevent session fixation
 $_SESSION['user_id'] = (int)$user['id'];
+$_SESSION['last_activity'] = time();
+$_SESSION['login_ip'] = get_client_ip();
 session_regenerate_id(true);
-error_log('[login] User (ID:' . $user['id'] . ') logged in. Session: ' . session_id());
+
+log_activity((int)$user['id'], 'login_success', "Role: {$user['role']}");
 
 $update = $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id');
 $update->execute(['id' => $user['id']]);

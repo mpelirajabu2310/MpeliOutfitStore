@@ -20,9 +20,19 @@ set_exception_handler(function (Throwable $e) {
     exit;
 });
 
-// Start session with consistent configuration
-$sessionLifetime = 86400; // 24 hours
+// ─── Session Configuration ──────────────────────────────────────────────────
+$sessionLifetime = 86400;
+$idleTimeout = 900; // 15 minutes of inactivity
 $isSecure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+
+ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Lax');
+if ($isSecure) {
+    ini_set('session.cookie_secure', '1');
+}
+
 session_set_cookie_params([
     'lifetime' => $sessionLifetime,
     'path' => '/',
@@ -32,26 +42,155 @@ session_set_cookie_params([
     'samesite' => 'Lax',
 ]);
 session_start();
-// Extend session lifetime on each request
-if (session_status() === PHP_SESSION_ACTIVE) {
-    setcookie(session_name(), session_id(), [
-        'expires' => time() + $sessionLifetime,
-        'path' => '/',
-        'domain' => '',
-        'secure' => $isSecure,
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
-}
 
-header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-cache, no-store, must-revalidate');
-header('Pragma: no-cache');
-header('Expires: 0');
+// Idle timeout: destroy session if no activity for $idleTimeout seconds
+if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $idleTimeout) {
+    $oldUserId = $_SESSION['user_id'] ?? null;
+    session_unset();
+    session_destroy();
+    session_start();
+    if ($oldUserId) {
+        log_activity((int)$oldUserId, 'session_timeout', 'Session expired due to inactivity');
+    }
+}
+$_SESSION['last_activity'] = time();
+
+// ─── Security Headers ───────────────────────────────────────────────────────
+if (!headers_sent()) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-cache, no-store, must-revalidate');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('X-XSS-Protection: 1; mode=block');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    header('Content-Security-Policy: default-src \'self\'; script-src \'self\' \'unsafe-inline\' \'unsafe-eval\'; style-src \'self\' \'unsafe-inline\' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src \'self\' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src \'self\' data:; connect-src \'self\';');
+}
 
 require_once __DIR__ . '/../config/database.php';
 $pdo = get_db();
 
+// ─── CSRF Token Helpers ─────────────────────────────────────────────────────
+function generate_csrf_token(): string
+{
+    if (empty($_SESSION['csrf_token']) || empty($_SESSION['csrf_token_time'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token_time'] = time();
+    }
+    // Refresh token every 30 minutes
+    if ((time() - $_SESSION['csrf_token_time']) > 1800) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token_time'] = time();
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function validate_csrf_token(?string $token): bool
+{
+    if ($token === null || $token === '') {
+        return false;
+    }
+    if (empty($_SESSION['csrf_token'])) {
+        return false;
+    }
+    // Token expires after 1 hour
+    if (isset($_SESSION['csrf_token_time']) && (time() - $_SESSION['csrf_token_time']) > 3600) {
+        unset($_SESSION['csrf_token'], $_SESSION['csrf_token_time']);
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+function require_csrf(): void
+{
+    $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!validate_csrf_token($token)) {
+        respond(['success' => false, 'message' => 'Invalid or expired security token. Please refresh the page.'], 403);
+    }
+}
+
+// ─── IP-Based Rate Limiting (file-backed) ───────────────────────────────────
+function get_client_ip(): string
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    if ($ip === '127.0.0.1' || $ip === '::1') {
+        $xff = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+        if ($xff !== '') {
+            $firstIp = trim(explode(',', $xff)[0]);
+            if (filter_var($firstIp, FILTER_VALIDATE_IP)) {
+                return $firstIp;
+            }
+        }
+    }
+    return $ip;
+}
+
+function _rate_limit_dir(): string
+{
+    $dir = __DIR__ . '/../logs/ratelimit';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0750, true);
+    }
+    return $dir;
+}
+
+function check_rate_limit(string $key, int $maxAttempts, int $windowSeconds): bool
+{
+    $ip = get_client_ip();
+    $file = _rate_limit_dir() . '/' . $key . '_' . md5($ip) . '.json';
+
+    $data = ['attempts' => 0, 'window_start' => 0];
+    if (is_file($file)) {
+        $raw = @file_get_contents($file);
+        if ($raw !== false) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $data = $decoded;
+            }
+        }
+    }
+
+    // Reset window if expired
+    if ($data['window_start'] === 0 || (time() - $data['window_start']) > $windowSeconds) {
+        $data = ['attempts' => 1, 'window_start' => time()];
+        @file_put_contents($file, json_encode($data), LOCK_EX);
+        return true;
+    }
+
+    if ($data['attempts'] >= $maxAttempts) {
+        return false;
+    }
+
+    $data['attempts']++;
+    @file_put_contents($file, json_encode($data), LOCK_EX);
+    return true;
+}
+
+function reset_rate_limit(string $key): void
+{
+    $ip = get_client_ip();
+    $file = _rate_limit_dir() . '/' . $key . '_' . md5($ip) . '.json';
+    if (is_file($file)) {
+        @unlink($file);
+    }
+}
+
+// ─── Activity Logging ───────────────────────────────────────────────────────
+function log_activity(int $userId, string $event, string $details = '', string $status = 'success'): void
+{
+    $ip = get_client_ip();
+    $timestamp = date('Y-m-d H:i:s');
+    $logLine = "[$timestamp] [user:$userId] [ip:$ip] [$event] [$status] $details" . PHP_EOL;
+    $logDir = __DIR__ . '/../logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0750, true);
+    }
+    @file_put_contents($logDir . '/activity.log', $logLine, FILE_APPEND | LOCK_EX);
+}
+
+// ─── Core Auth Helpers ──────────────────────────────────────────────────────
 function read_json_body(): array
 {
     $raw = file_get_contents('php://input');
@@ -65,7 +204,10 @@ function read_json_body(): array
 
 function respond(array $payload, int $status = 200): void
 {
-    // Clean any accidental output before sending JSON
+    // Attach fresh CSRF token to every response if session is active
+    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['user_id'])) {
+        $payload['csrf_token'] = generate_csrf_token();
+    }
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
