@@ -2,15 +2,29 @@
 declare(strict_types=1);
 
 require __DIR__ . '/db.php';
+require_once __DIR__ . '/../services/SystemHealthService.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
 try {
+    $healthService = new SystemHealthService();
+    $health = $healthService->runFullStartupCheck();
+
+    if (!$health['healthy']) {
+        respond([
+            'success' => false,
+            'healthy' => false,
+            'message' => 'System health check failed. The application cannot start.',
+            'checks' => $health['checks'],
+        ], 503);
+    }
+
+    $maintenance = $healthService->getMaintenanceInfo();
+
     $user = current_user($pdo);
 
-    // If session has a stale user_id pointing to a deleted/nonexistent user, clear it
     if (!$user && !empty($_SESSION['user_id'])) {
         unset($_SESSION['user_id']);
     }
@@ -19,6 +33,8 @@ try {
 
     respond([
         'success' => true,
+        'healthy' => true,
+        'maintenance' => $maintenance,
         'authenticated' => $user !== null,
         'owner_exists' => $hasOwner,
         'user' => $user,

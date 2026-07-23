@@ -1,5 +1,7 @@
 logs/
 logs/ratelimit/
+logs/.maintenance
 _archive/
 *.log
 .env
+api/recover_owner.php

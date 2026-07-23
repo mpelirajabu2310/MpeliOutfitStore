@@ -32,6 +32,26 @@ $timestamp = time();
       <p class="splash-text">Loading...</p>
     </div>
   </div>
+  <main class="health-screen hidden" id="healthScreen">
+    <div class="health-content">
+      <img src="images/logo.png" alt="Mpeli Outfit Store" class="splash-logo" style="margin-bottom:24px">
+      <h1 class="health-title" id="healthTitle">System Health Check</h1>
+      <p class="health-subtitle" id="healthSubtitle">Verifying database connection, configuration, and system integrity...</p>
+      <div class="health-spinner"></div>
+      <div class="health-checks" id="healthChecks"></div>
+      <div class="health-actions hidden" id="healthActions">
+        <button class="gold-button" id="healthRetry" onclick="location.reload()"><i class="bi bi-arrow-clockwise"></i> Retry</button>
+      </div>
+    </div>
+  </main>
+  <main class="maintenance-screen hidden" id="maintenanceScreen">
+    <div class="health-content">
+      <img src="images/logo.png" alt="Mpeli Outfit Store" class="splash-logo" style="margin-bottom:24px">
+      <h1 class="health-title">Under Maintenance</h1>
+      <p class="health-subtitle" id="maintenanceMessage">The system is currently undergoing scheduled maintenance. Please try again later.</p>
+      <div class="maintenance-icon"><i class="bi bi-tools"></i></div>
+    </div>
+  </main>
   <main class="login-screen" id="loginScreen">
     <section class="login-art" aria-label="Boutique preview" data-i18n-aria-label="aria.boutiquePreview">
       <div class="login-art-body">
@@ -75,6 +95,7 @@ $timestamp = time();
           </div>
         </label>
         <button type="submit" data-i18n="login.signIn"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+        <p class="login-recovery-hint"><a href="api/recover_owner.php" id="recoveryLink"><i class="bi bi-question-circle"></i> Lost access? Recovery</a></p>
       </form>
       <form class="login-card setup-card hidden" id="ownerSetupForm">
         <div class="login-logo-center">
@@ -415,6 +436,14 @@ $timestamp = time();
             <label for="receiptFooter" data-i18n="settings.receiptFooter">Receipt footer</label>
             <input type="text" id="receiptFooter" />
           </article>
+          <article class="panel settings-card owner-only">
+            <h3 data-i18n="settings.maintenance">System Maintenance</h3>
+            <label class="toggle-line"><span data-i18n="settings.maintenanceMode">Maintenance Mode</span> <input type="checkbox" id="maintenanceModeToggle" /></label>
+            <p class="form-hint" data-i18n="settings.maintenanceHint">When enabled, only owners can log in. All other users will see a maintenance screen.</p>
+            <label for="maintenanceMessage" data-i18n="settings.maintenanceMessage">Maintenance message</label>
+            <input type="text" id="maintenanceMessage" value="System is under maintenance. Please try again later." data-i18n-placeholder="settings.maintenanceMessage" />
+            <button class="gold-button" type="button" id="saveMaintenanceButton" data-i18n="settings.saveMaintenance"><i class="bi bi-tools"></i> Save maintenance settings</button>
+          </article>
         </section>
         <div class="settings-actions">
           <p class="form-hint" id="settingsMessage" role="status"></p>
@@ -442,6 +471,30 @@ $timestamp = time();
         <button type="button" class="ghost-button" id="reportDateCancel">Cancel</button>
         <button type="button" class="gold-button" id="reportDateConfirm"><i class="bi bi-check-lg"></i> Generate</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Recovery modal -->
+  <div class="modal-overlay hidden" id="recoveryModal">
+    <div class="reset-dialog">
+      <button type="button" class="reset-close" id="recoveryClose"><i class="bi bi-x-lg"></i></button>
+      <div class="logo-lockup" style="margin-bottom:20px">
+        <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle" style="width:48px;height:48px">
+        <div>
+          <strong>Mpeli Outfit Store</strong>
+          <small data-i18n="recovery.title">Account Recovery</small>
+        </div>
+      </div>
+      <h3 data-i18n="recovery.heading">Reset Owner Password</h3>
+      <p class="reset-info" data-i18n="recovery.description">Enter the recovery passcode. This will reset the owner password and clear all rate limits.</p>
+      <form id="recoveryForm">
+        <label><span data-i18n="recovery.passcode">Recovery Passcode</span><div class="input-icon-wrap"><i class="bi bi-key"></i><input type="text" id="recoveryPasscode" required autocomplete="off" /></div></label>
+        <div class="reset-actions">
+          <button type="button" class="ghost-button" id="recoveryCancel" data-i18n="common.cancel">Cancel</button>
+          <button type="submit" class="gold-button" data-i18n="recovery.reset"><i class="bi bi-arrow-counterclockwise"></i> Reset Password</button>
+        </div>
+        <p class="form-hint" id="recoveryResult" style="margin-top:12px;white-space:pre-line"></p>
+      </form>
     </div>
   </div>
 

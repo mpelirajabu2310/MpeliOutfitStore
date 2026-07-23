@@ -199,6 +199,8 @@ function applyRoleUI() {
 }
 
 function showApp() {
+  document.querySelector("#healthScreen")?.classList.add("hidden");
+  document.querySelector("#maintenanceScreen")?.classList.add("hidden");
   document.querySelector("#loginScreen").classList.add("hidden");
   document.querySelector("#appShell").classList.remove("hidden");
   setTheme(getStoredTheme());
@@ -206,18 +208,69 @@ function showApp() {
 }
 
 function showLogin(ownerExists = true) {
+  document.querySelector("#healthScreen")?.classList.add("hidden");
+  document.querySelector("#maintenanceScreen")?.classList.add("hidden");
   document.querySelector("#loginScreen").classList.remove("hidden");
   document.querySelector("#appShell").classList.add("hidden");
   
   if (ownerExists) {
-    // Owner exists, show login form, hide setup form
     document.querySelector("#loginForm").classList.remove("hidden");
     document.querySelector("#ownerSetupForm").classList.add("hidden");
   } else {
-    // No owner exists, show setup form, hide login form
     document.querySelector("#loginForm").classList.add("hidden");
     document.querySelector("#ownerSetupForm").classList.remove("hidden");
   }
+}
+
+function showHealthScreen(checks, allPassed) {
+  document.querySelector("#loginScreen").classList.add("hidden");
+  document.querySelector("#appShell").classList.add("hidden");
+  document.querySelector("#maintenanceScreen")?.classList.add("hidden");
+  const screen = document.querySelector("#healthScreen");
+  screen.classList.remove("hidden");
+
+  const title = document.querySelector("#healthTitle");
+  const subtitle = document.querySelector("#healthSubtitle");
+  const checksContainer = document.querySelector("#healthChecks");
+  const actions = document.querySelector("#healthActions");
+  const spinner = screen.querySelector(".health-spinner");
+
+  title.textContent = allPassed ? "System Ready" : "System Health Check";
+  subtitle.textContent = allPassed
+    ? "All systems operational."
+    : "Some checks failed. Please review the details below.";
+
+  spinner.classList.add("hidden");
+  actions.classList.remove("hidden");
+
+  checksContainer.innerHTML = checks.map(c => {
+    const icon = c.severity === 'critical' ? 'bi-x-circle-fill'
+      : c.severity === 'warning' ? 'bi-exclamation-triangle-fill'
+      : 'bi-check-circle-fill';
+    const cls = c.severity === 'critical' ? 'fail'
+      : c.severity === 'warning' ? 'warn'
+      : 'pass';
+    return `<div class="health-check-item ${cls}">
+      <span class="health-check-icon"><i class="bi ${icon}"></i></span>
+      <span class="health-check-label">${escapeHtml(c.label)}</span>
+      <span class="health-check-detail">${escapeHtml(c.detail)}</span>
+    </div>`;
+  }).join("");
+
+  if (allPassed) {
+    setTimeout(() => {
+      screen.classList.add("hidden");
+    }, 2000);
+  }
+}
+
+function showMaintenanceScreen(message) {
+  document.querySelector("#loginScreen").classList.add("hidden");
+  document.querySelector("#appShell").classList.add("hidden");
+  document.querySelector("#healthScreen")?.classList.add("hidden");
+  const screen = document.querySelector("#maintenanceScreen");
+  screen.classList.remove("hidden");
+  document.querySelector("#maintenanceMessage").textContent = message;
 }
 
 function normalizeProduct(product) {
@@ -763,7 +816,7 @@ function showToast(message, type) {
 async function refreshAppData() {
   const tasks = [loadProducts(), loadDashboard(), loadExpenses()];
   if (isOwner()) {
-    tasks.push(loadSettings(), loadUsers(), loadInventory(), loadReports());
+    tasks.push(loadSettings(), loadUsers(), loadInventory(), loadReports(), loadMaintenanceStatus());
   }
   const results = await Promise.allSettled(tasks);
   let errors = 0;
@@ -877,6 +930,59 @@ document.querySelector("#resetPasswordForm")?.addEventListener("submit", async e
     closeResetPasswordModal();
   } catch (error) {
     showToast(error.message, "error");
+  }
+});
+
+function closeRecoveryModal() {
+  document.querySelector("#recoveryModal")?.classList.add("hidden");
+  document.querySelector("#recoveryForm")?.reset();
+  const result = document.querySelector("#recoveryResult");
+  if (result) result.textContent = "";
+}
+
+document.querySelector("#recoveryLink")?.addEventListener("click", e => {
+  e.preventDefault();
+  document.querySelector("#recoveryModal")?.classList.remove("hidden");
+});
+document.querySelector("#recoveryClose")?.addEventListener("click", closeRecoveryModal);
+document.querySelector("#recoveryCancel")?.addEventListener("click", closeRecoveryModal);
+document.querySelector("#recoveryModal")?.addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeRecoveryModal();
+});
+
+document.querySelector("#recoveryForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const passcode = document.querySelector("#recoveryPasscode")?.value?.trim();
+  const result = document.querySelector("#recoveryResult");
+  if (!passcode) return;
+
+  try {
+    const response = await fetch("api/recover_owner.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passcode }),
+    });
+    const data = await response.json();
+    if (data.success) {
+      if (result) {
+        result.style.color = "var(--success)";
+        result.textContent = t("recovery.success", {
+          username: data.username,
+          password: data.new_password,
+          hint: data.hint,
+        });
+      }
+    } else {
+      if (result) {
+        result.style.color = "var(--danger)";
+        result.textContent = data.message || t("recovery.failed");
+      }
+    }
+  } catch (error) {
+    if (result) {
+      result.style.color = "var(--danger)";
+      result.textContent = t("recovery.failed");
+    }
   }
 });
 
@@ -1425,6 +1531,41 @@ document.querySelector("#saveSettingsButton")?.addEventListener("click", async (
   }
 });
 
+async function loadMaintenanceStatus() {
+  if (!isOwner()) return;
+  try {
+    const payload = await apiRequest("api/maintenance.php");
+    const toggle = document.querySelector("#maintenanceModeToggle");
+    const msgInput = document.querySelector("#maintenanceMessage");
+    if (toggle && payload.maintenance) {
+      toggle.checked = payload.maintenance.active === true;
+      if (msgInput && payload.maintenance.message) {
+        msgInput.value = payload.maintenance.message;
+      }
+    }
+  } catch (e) {
+    console.warn("[maintenance] Failed to load status:", e);
+  }
+}
+
+document.querySelector("#saveMaintenanceButton")?.addEventListener("click", async () => {
+  const toggle = document.querySelector("#maintenanceModeToggle");
+  const msgInput = document.querySelector("#maintenanceMessage");
+  if (!toggle) return;
+  try {
+    const payload = await apiRequest("api/maintenance.php", {
+      method: "POST",
+      body: JSON.stringify({
+        enable: toggle.checked,
+        message: msgInput?.value || "System is under maintenance.",
+      }),
+    });
+    showToast(t("settings.maintenanceSaved"));
+  } catch (error) {
+    showToast(error.message, "error");
+  }
+});
+
 let reportStartDate = "";
 let reportEndDate = "";
 let reportFormat = "json";
@@ -1570,37 +1711,50 @@ function startDashboardAutoRefresh() {
 async function init() {
   console.log("[init] Starting app initialization...");
   try {
-    // Load translations
     await loadTranslations(currentLanguage);
     applyTranslations();
-    
-    // Populate app language switcher
+
     const appSwitcher = document.querySelector("#appLanguageSwitcher");
     if (appSwitcher && !appSwitcher.options.length) {
       appSwitcher.innerHTML = '<option value="en">English</option><option value="sw">Swahili</option>';
       appSwitcher.value = currentLanguage;
     }
-    
-    // Always do a fresh API call to check authentication and owner status
-    let payload;
+
+    let mePayload;
     try {
-      payload = await apiRequest("api/me.php");
+      mePayload = await apiRequest("api/me.php");
     } catch (error) {
-      console.error("[init] Auth check failed:", error);
-      showLogin(true);
+      console.error("[init] System health or auth check failed:", error);
+      const healthChecks = [{ id: 'connection', label: 'Server Connection', severity: 'critical', detail: error.message || 'Could not reach the server.' }];
+      showHealthScreen(healthChecks, false);
       return;
     }
-    
-    // If user is authenticated, show app
-    if (payload.authenticated && payload.user) {
-      currentUser = payload.user;
+
+    if (mePayload.healthy === false || mePayload.success === false) {
+      console.error("[init] System unhealthy:", mePayload.checks);
+      showHealthScreen(mePayload.checks || [{ id: 'unknown', label: 'Unknown Error', severity: 'critical', detail: 'System check failed.' }], false);
+      return;
+    }
+
+    if (mePayload.maintenance && mePayload.maintenance.active) {
+      const maintRole = mePayload.user?.role;
+      const allowed = mePayload.maintenance.allowed_roles || ['OWNER'];
+      if (maintRole && allowed.includes(maintRole)) {
+        console.log("[init] Maintenance mode — owner bypass allowed");
+      } else {
+        showMaintenanceScreen(mePayload.maintenance.message || 'System is under maintenance.');
+        return;
+      }
+    }
+
+    if (mePayload.authenticated && mePayload.user) {
+      currentUser = mePayload.user;
       console.log("[init] User authenticated as:", currentUser.name, "(" + currentUser.role + ")");
       showApp();
       await refreshAppData();
       startDashboardAutoRefresh();
     } else {
-      // Not authenticated - check if owner exists
-      const ownerExists = payload.owner_exists === true;
+      const ownerExists = mePayload.owner_exists === true;
       console.log("[init] Not authenticated, owner_exists:", ownerExists);
       showLogin(ownerExists);
     }

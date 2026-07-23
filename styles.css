@@ -317,6 +317,22 @@ input:focus, select:focus {
   width: auto;
 }
 
+.login-recovery-hint {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.login-recovery-hint a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color .2s;
+}
+
+.login-recovery-hint a:hover {
+  color: var(--gold);
+}
+
 .login-card .link-button {
   background: none;
   border: none;
@@ -1361,6 +1377,123 @@ body.sidebar-open { overflow: hidden; }
 @keyframes appFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Health Check / Maintenance Screens */
+.health-screen,
+.maintenance-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition: opacity .4s ease, visibility .4s ease;
+}
+
+.health-screen.hidden,
+.maintenance-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.health-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 480px;
+  padding: 32px;
+}
+
+.health-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.health-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 28px;
+  line-height: 1.6;
+}
+
+.health-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(201,162,78,.2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: splashSpin .8s linear infinite;
+  margin-bottom: 28px;
+}
+
+.health-checks {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.health-check-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  text-align: left;
+}
+
+.health-check-item.pass {
+  border-color: rgba(45,124,89,.3);
+}
+
+.health-check-item.fail {
+  border-color: rgba(184,76,67,.3);
+}
+
+.health-check-item.warn {
+  border-color: rgba(201,162,78,.3);
+}
+
+.health-check-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.health-check-item.pass .health-check-icon { color: var(--success); }
+.health-check-item.fail .health-check-icon { color: var(--danger); }
+.health-check-item.warn .health-check-icon { color: var(--gold); }
+
+.health-check-label {
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.health-check-detail {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.health-actions {
+  margin-top: 24px;
+  display: flex;
+  gap: 12px;
+}
+
+.maintenance-icon {
+  font-size: 64px;
+  color: var(--gold);
+  margin: 24px 0;
+  animation: splashPulse 2s ease-in-out infinite;
 }
 
 /* Nav item icons */
