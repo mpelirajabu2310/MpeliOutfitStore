@@ -1,8 +1,18 @@
+# Logs
 logs/
 logs/ratelimit/
 logs/.maintenance
-backups/
-_archive/
 *.log
+
+# Development tools
+_dev/
+
+# Environment
 .env
-api/recover_owner.php
+
+# Database (production only — use database/clothing_shop_management.sql)
+database/*.sql
+
+# OS files
+.DS_Store
+Thumbs.db

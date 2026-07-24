@@ -31,7 +31,7 @@ class SystemHealthService
         'logs',
         'logs/ratelimit',
         'locales',
-        'images',
+        'assets/images',
     ];
 
     private const REQUIRED_FILES = [
@@ -39,8 +39,8 @@ class SystemHealthService
         'api/db.php',
         'api/login.php',
         'api/me.php',
-        'script.js',
-        'styles.css',
+        'assets/js/script.js',
+        'assets/css/styles.css',
         'locales/en.json',
     ];
 

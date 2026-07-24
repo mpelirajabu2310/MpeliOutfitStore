@@ -152,7 +152,7 @@ h1 { font-weight: 700; }
   color: var(--white);
   background:
     linear-gradient(135deg, rgba(17,16,14,.92) 0%, rgba(17,16,14,.72) 50%, rgba(17,16,14,.88) 100%),
-    url("images/img1.png") center/cover no-repeat;
+    url("assets/images/img1.png") center/cover no-repeat;
 }
 
 .login-art::before {

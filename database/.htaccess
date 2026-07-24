@@ -1,0 +1,2 @@
+# Block all web access to database files
+Require all denied

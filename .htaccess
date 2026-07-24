@@ -1,32 +1,71 @@
-# Suppress PHP errors from being displayed to users
+# ══════════════════════════════════════════════════════════════════════════════
+# Production .htaccess — Mpeli OutFit Store
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Force HTTPS (uncomment when SSL is configured)
+# RewriteEngine On
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# ─── PHP Error Handling ──────────────────────────────────────────────────────
 php_flag display_errors off
 php_flag display_startup_errors off
-
-# Log errors instead
 php_flag log_errors on
 php_value error_log /var/log/php_errors.log
-
-# Set PHP error reporting
 php_value error_reporting -1
 
-# Block access to SQL files — must never be served via HTTP
+# ─── Security Headers ────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';"
+</IfModule>
+
+# ─── Block Sensitive Files ───────────────────────────────────────────────────
+# Block SQL files
 <FilesMatch "\.sql$">
     Require all denied
 </FilesMatch>
 
-# Block access to migration/deployment scripts
-<FilesMatch "^(database\.sql|database_clean\.sql|migrate_)">
+# Block database schema files
+<FilesMatch "^clothing_shop_management\.sql$">
     Require all denied
 </FilesMatch>
 
-# Enable gzip compression
+# Block hidden files (.git, .env, .htaccess in subdirs, etc)
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# ─── Compression ─────────────────────────────────────────────────────────────
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
 </IfModule>
 
-# Cache control headers
+# ─── Caching ─────────────────────────────────────────────────────────────────
 <IfModule mod_headers.c>
-  Header set Cache-Control "no-cache, no-store, must-revalidate"
-  Header set Pragma "no-cache"
-  Header set Expires "0"
+    # Static assets — cache for 1 month
+    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$">
+        Header set Cache-Control "public, max-age=2592000, immutable"
+    </FilesMatch>
+
+    # HTML — no cache
+    <FilesMatch "\.html?$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+
+    # PHP — no cache (dynamic)
+    <FilesMatch "\.php$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
 </IfModule>
+
+# ─── Default Directory Index ─────────────────────────────────────────────────
+DirectoryIndex index.php

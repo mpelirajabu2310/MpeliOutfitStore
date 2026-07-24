@@ -25,19 +25,19 @@ $timestamp = time();
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <link rel="stylesheet" href="styles.css?v=<?php echo $timestamp; ?>&bust=3" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=<?php echo $timestamp; ?>&bust=4" />
 </head>
 <body>
   <div class="splash-screen" id="splashScreen">
     <div class="splash-content">
-      <img src="images/logo.png" alt="Mpeli Outfit Store" class="splash-logo">
+      <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="splash-logo">
       <div class="splash-loader"></div>
       <p class="splash-text">Loading...</p>
     </div>
   </div>
   <main class="health-screen hidden" id="healthScreen">
     <div class="health-content">
-      <img src="images/logo.png" alt="Mpeli Outfit Store" class="splash-logo" style="margin-bottom:24px">
+      <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="splash-logo" style="margin-bottom:24px">
       <h1 class="health-title" id="healthTitle">System Health Check</h1>
       <p class="health-subtitle" id="healthSubtitle">Verifying database connection, configuration, and system integrity...</p>
       <div class="health-spinner"></div>
@@ -49,7 +49,7 @@ $timestamp = time();
   </main>
   <main class="maintenance-screen hidden" id="maintenanceScreen">
     <div class="health-content">
-      <img src="images/logo.png" alt="Mpeli Outfit Store" class="splash-logo" style="margin-bottom:24px">
+      <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="splash-logo" style="margin-bottom:24px">
       <h1 class="health-title">Under Maintenance</h1>
       <p class="health-subtitle" id="maintenanceMessage">The system is currently undergoing scheduled maintenance. Please try again later.</p>
       <div class="maintenance-icon"><i class="bi bi-tools"></i></div>
@@ -58,7 +58,7 @@ $timestamp = time();
   <main class="login-screen" id="loginScreen">
     <section class="login-art" aria-label="Boutique preview" data-i18n-aria-label="aria.boutiquePreview">
       <div class="login-art-body">
-        <img src="images/logo.png" alt="logo" class="brand-mark">
+        <img src="assets/images/logo.png" alt="logo" class="brand-mark">
         <div class="login-art-text">
           <p class="eyebrow" data-i18n="brand.boutique">MPELI OUTFIT STORE</p>
           <h1 data-i18n="login.heroTitle">Clothing shop management with a luxury retail rhythm.</h1>
@@ -70,7 +70,7 @@ $timestamp = time();
     <section class="login-panel" aria-label="Admin login" data-i18n-aria-label="aria.adminLogin">
       <form class="login-card" id="loginForm" autocomplete="off">
         <div class="login-logo-center">
-          <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
+          <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
         </div>
         <p class="login-shop-name">Mpeli Outfit Store</p>
         <label class="language-field">
@@ -102,7 +102,7 @@ $timestamp = time();
       </form>
       <form class="login-card setup-card hidden" id="ownerSetupForm" autocomplete="off">
         <div class="login-logo-center">
-          <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
+          <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
         </div>
         <p class="login-shop-name">Mpeli Outfit Store</p>
         <h2 data-i18n="auth.createOwner">Create owner account</h2>
@@ -144,7 +144,7 @@ $timestamp = time();
         <button class="menu-button" id="menuButton" aria-label="Toggle menu" data-i18n-aria-label="aria.toggleMenu"><i class="bi bi-list hamburger-icon" aria-hidden="true"></i></button>
 
         <div class="topbar-left">
-          <img src="images/logo.png" alt="Logo" class="topbar-logo" />
+          <img src="assets/images/logo.png" alt="Logo" class="topbar-logo" />
           <strong class="topbar-store-name" id="topbarStoreName">Mpeli Outfit Store</strong>
         </div>
 
@@ -512,7 +512,7 @@ $timestamp = time();
     <div class="reset-dialog">
       <button type="button" class="reset-close" id="recoveryClose"><i class="bi bi-x-lg"></i></button>
       <div class="logo-lockup" style="margin-bottom:20px">
-        <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle" style="width:48px;height:48px">
+        <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle" style="width:48px;height:48px">
         <div>
           <strong>Mpeli Outfit Store</strong>
           <small data-i18n="recovery.title">Account Recovery</small>
@@ -566,7 +566,7 @@ $timestamp = time();
     <div class="reset-dialog">
       <button type="button" class="reset-close" id="resetPasswordClose"><i class="bi bi-x-lg"></i></button>
       <div class="logo-lockup" style="margin-bottom:20px">
-        <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle" style="width:48px;height:48px">
+        <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle" style="width:48px;height:48px">
         <div>
           <strong>Mpeli Outfit Store</strong>
           <small data-i18n="auth.passwordRecovery">Change Password</small>
@@ -623,6 +623,6 @@ $timestamp = time();
     </div>
   </div>
 
-  <script src="script.js?v=<?php echo $timestamp; ?>&bust=2"></script>
+  <script src="assets/js/script.js?v=<?php echo $timestamp; ?>&bust=4"></script>
 </body>
 </html>
