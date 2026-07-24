@@ -2,6 +2,8 @@
 /**
  * COMPLETE SYSTEM RESET — MpeliOutFitStore
  * 
+ * AUTHORIZED OWNER ONLY — requires session auth, CSRF, and confirmation token.
+ * 
  * Part 1: Backup
  * Part 2-5: Clear all data
  * Part 6: Clean uploaded files
@@ -12,9 +14,24 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
-require_once __DIR__ . '/../config/database.php';
+require __DIR__ . '/db.php';
 
-$pdo = get_db();
+// ── AUTHENTICATION: OWNER ONLY ─────────────────────────────
+$user = require_role($pdo, ['OWNER']);
+require_csrf();
+
+// ── CONFIRMATION: Must send explicit confirmation token ─────
+$data = read_json_body();
+$confirmationToken = (string)($data['confirmation'] ?? '');
+if ($confirmationToken !== 'CONFIRM_FULL_RESET') {
+    respond([
+        'success' => false,
+        'message' => 'System reset requires explicit confirmation. Send {"confirmation": "CONFIRM_FULL_RESET"} in the request body.',
+    ], 422);
+}
+
+log_activity((int)$user['id'], 'system_reset_initiated', "User: {$user['username']}");
+
 $baseDir = dirname(__DIR__);
 $backupDir = $baseDir . '/backups/pre_reset_' . date('Y-m-d_H-i-s');
 

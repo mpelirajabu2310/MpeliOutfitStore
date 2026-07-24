@@ -21,6 +21,9 @@ $timestamp = time();
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title data-i18n="app.title">mpeli Outfit Store | Clothing Shop Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
   <link rel="stylesheet" href="styles.css?v=<?php echo $timestamp; ?>&bust=2" />
 </head>
@@ -65,7 +68,7 @@ $timestamp = time();
     </section>
 
     <section class="login-panel" aria-label="Admin login" data-i18n-aria-label="aria.adminLogin">
-      <form class="login-card" id="loginForm">
+      <form class="login-card" id="loginForm" autocomplete="off">
         <div class="login-logo-center">
           <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
         </div>
@@ -97,7 +100,7 @@ $timestamp = time();
         <button type="submit" data-i18n="login.signIn"><i class="bi bi-box-arrow-in-right"></i> <span class="btn-text">Sign in</span><span class="btn-loading-text">Signing in...</span></button>
         <p class="login-recovery-hint"><a href="api/recover_owner.php" id="recoveryLink"><i class="bi bi-question-circle"></i> Lost access? Recovery</a></p>
       </form>
-      <form class="login-card setup-card hidden" id="ownerSetupForm">
+      <form class="login-card setup-card hidden" id="ownerSetupForm" autocomplete="off">
         <div class="login-logo-center">
           <img src="images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
         </div>
@@ -336,7 +339,7 @@ $timestamp = time();
             <input id="employeeName" placeholder="Name" data-i18n-placeholder="users.name" />
             <input id="employeeUsername" placeholder="Username" data-i18n-placeholder="login.username" />
             <input id="employeeEmail" type="email" placeholder="Email" data-i18n-placeholder="users.email" />
-            <div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input id="employeePassword" type="password" placeholder="Password" data-i18n-placeholder="login.password" /><button type="button" class="password-toggle" id="employeePasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
+            <div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input id="employeePassword" type="password" placeholder="Password" data-i18n-placeholder="login.password" autocomplete="new-password" /><button type="button" class="password-toggle" id="employeePasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
             <input type="hidden" id="employeeRole" value="SELLER" />
             <p class="form-hint" data-i18n="users.sellerOnlyHint">New employees are registered as SELLER.</p>
             <button class="gold-button full" type="submit" data-i18n="users.createUser">Create user</button>
@@ -424,7 +427,7 @@ $timestamp = time();
             <label for="adminEmail" data-i18n="settings.adminEmail">Admin email</label>
             <input id="adminEmail" aria-label="Admin email" data-i18n-aria-label="settings.adminEmail" />
             <label for="adminPassword" data-i18n="settings.adminPassword">Admin password</label>
-            <div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input id="adminPassword" type="password" aria-label="Admin password" data-i18n-aria-label="settings.adminPassword" /><button type="button" class="password-toggle" id="adminPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
+            <div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input id="adminPassword" type="password" aria-label="Admin password" data-i18n-aria-label="settings.adminPassword" autocomplete="new-password" /><button type="button" class="password-toggle" id="adminPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div>
           </article>
           <article class="panel settings-card">
             <h3 data-i18n="settings.systemPreferences">System preferences</h3>
@@ -474,7 +477,7 @@ $timestamp = time();
     </div>
   </div>
 
-  <!-- Recovery modal -->
+  <!-- Recovery modal — Step 1: Verify Identity -->
   <div class="modal-overlay hidden" id="recoveryModal">
     <div class="reset-dialog">
       <button type="button" class="reset-close" id="recoveryClose"><i class="bi bi-x-lg"></i></button>
@@ -485,16 +488,46 @@ $timestamp = time();
           <small data-i18n="recovery.title">Account Recovery</small>
         </div>
       </div>
-      <h3 data-i18n="recovery.heading">Reset Owner Password</h3>
-      <p class="reset-info" data-i18n="recovery.description">Enter the recovery passcode. This will reset the owner password and clear all rate limits.</p>
-      <form id="recoveryForm">
-        <label><span data-i18n="recovery.passcode">Recovery Passcode</span><div class="input-icon-wrap"><i class="bi bi-key"></i><input type="text" id="recoveryPasscode" required autocomplete="off" /></div></label>
-        <div class="reset-actions">
-          <button type="button" class="ghost-button" id="recoveryCancel" data-i18n="common.cancel">Cancel</button>
-          <button type="submit" class="gold-button" data-i18n="recovery.reset"><i class="bi bi-arrow-counterclockwise"></i> Reset Password</button>
+
+      <!-- Step 1: Verify Identity -->
+      <div id="recoveryStep1">
+        <h3 data-i18n="recovery.step1Heading">Verify Your Identity</h3>
+        <p class="reset-info" data-i18n="recovery.step1Description">Enter your username and email address to verify your account.</p>
+        <form id="recoveryVerifyForm">
+          <label><span data-i18n="recovery.username">Username</span><div class="input-icon-wrap"><i class="bi bi-person"></i><input type="text" id="recoveryUsername" required autocomplete="username" /></div></label>
+          <label><span data-i18n="recovery.email">Email Address</span><div class="input-icon-wrap"><i class="bi bi-envelope"></i><input type="email" id="recoveryEmail" required autocomplete="email" /></div></label>
+          <div class="reset-actions">
+            <button type="button" class="ghost-button" id="recoveryCancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="gold-button" id="recoveryVerifyBtn"><i class="bi bi-shield-check"></i> <span data-i18n="recovery.verify">Verify Identity</span></button>
+          </div>
+          <p class="form-hint" id="recoveryStep1Result" style="margin-top:12px;white-space:pre-line"></p>
+        </form>
+      </div>
+
+      <!-- Step 2: Set New Password (hidden by default) -->
+      <div id="recoveryStep2" class="hidden">
+        <h3 data-i18n="recovery.step2Heading">Set New Password</h3>
+        <p class="reset-info" data-i18n="recovery.step2Description">Identity verified. Choose a new password for your account.</p>
+        <form id="recoveryResetForm">
+          <label><span data-i18n="recovery.newPassword">New Password</span><div class="input-icon-wrap"><i class="bi bi-lock"></i><input type="password" id="recoveryNewPassword" required autocomplete="new-password" /></div></label>
+          <label><span data-i18n="recovery.confirmPassword">Confirm New Password</span><div class="input-icon-wrap"><i class="bi bi-lock"></i><input type="password" id="recoveryConfirmPassword" required autocomplete="new-password" /></div></label>
+          <div class="reset-actions">
+            <button type="button" class="ghost-button" id="recoveryBackToVerify" data-i18n="common.cancel">Back</button>
+            <button type="submit" class="gold-button" id="recoveryResetBtn"><i class="bi bi-arrow-counterclockwise"></i> <span data-i18n="recovery.resetButton">Reset Password</span></button>
+          </div>
+          <p class="form-hint" id="recoveryStep2Result" style="margin-top:12px;white-space:pre-line"></p>
+        </form>
+      </div>
+
+      <!-- Success State (hidden by default) -->
+      <div id="recoverySuccess" class="hidden">
+        <div style="text-align:center;padding:20px 0">
+          <i class="bi bi-check-circle" style="font-size:48px;color:var(--accent-green);margin-bottom:12px;display:block"></i>
+          <h3 data-i18n="recovery.resetSuccessTitle">Password Reset Successfully</h3>
+          <p class="reset-info" id="recoverySuccessMsg" data-i18n="recovery.resetSuccess">You can now log in with your new password.</p>
+          <button type="button" class="gold-button" id="recoveryBackToLogin" style="margin-top:16px"><i class="bi bi-box-arrow-in-right"></i> <span data-i18n="recovery.backToLogin">Back to Login</span></button>
         </div>
-        <p class="form-hint" id="recoveryResult" style="margin-top:12px;white-space:pre-line"></p>
-      </form>
+      </div>
     </div>
   </div>
 
@@ -512,9 +545,9 @@ $timestamp = time();
       <h3 data-i18n="auth.resetPasswordTitle">Change your password</h3>
       <p class="reset-info" data-i18n="auth.changePasswordInfo">Enter your current password and choose a new one.</p>
       <form id="resetPasswordForm">
-        <label><span data-i18n="login.currentPassword">Current password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetCurrentPassword" required /><button type="button" class="password-toggle" id="resetCurrentPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
-        <label><span data-i18n="login.newPassword">New password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetNewPassword" minlength="8" required /><button type="button" class="password-toggle" id="resetNewPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
-        <label><span data-i18n="login.confirmNewPassword">Confirm new password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetConfirmPassword" minlength="8" required /><button type="button" class="password-toggle" id="resetConfirmPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
+        <label><span data-i18n="login.currentPassword">Current password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetCurrentPassword" required autocomplete="current-password" /><button type="button" class="password-toggle" id="resetCurrentPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
+        <label><span data-i18n="login.newPassword">New password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetNewPassword" minlength="8" required autocomplete="new-password" /><button type="button" class="password-toggle" id="resetNewPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
+        <label><span data-i18n="login.confirmNewPassword">Confirm new password</span><div class="input-icon-wrap password-wrap"><i class="bi bi-lock"></i><input type="password" id="resetConfirmPassword" minlength="8" required autocomplete="new-password" /><button type="button" class="password-toggle" id="resetConfirmPasswordToggle" aria-label="Show password"><i class="bi bi-eye"></i></button></div></label>
         <div class="reset-actions">
           <button type="button" class="ghost-button" id="resetPasswordCancel" data-i18n="common.cancel">Cancel</button>
           <button type="submit" class="gold-button" data-i18n="auth.changePassword"><i class="bi bi-key"></i> Change Password</button>

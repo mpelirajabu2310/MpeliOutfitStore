@@ -40,6 +40,23 @@ echo "==============================================\n";
 echo "  NEW INSTALLATION FLOW TEST\n";
 echo "==============================================\n\n";
 
+// ── CLEANUP: Ensure clean state ────────────────────────────
+echo "--- CLEANUP: Truncating all data ---\n";
+require_once __DIR__ . '/../config/database.php';
+$pdo = get_db();
+$pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+$truncateOrder = ['sale_items','payments','sales','inventory_movements','expenses','product_variants','products','categories','colors','sizes','customers','users','shop_settings','migration_history'];
+foreach ($truncateOrder as $table) {
+    try {
+        $typeCheck = $pdo->query("SELECT TABLE_TYPE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$table}'")->fetch();
+        if (($typeCheck['TABLE_TYPE'] ?? '') === 'VIEW') continue;
+        $pdo->exec("TRUNCATE TABLE `$table`");
+    } catch (PDOException $e) { /* skip */ }
+}
+$pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+@unlink(__DIR__ . '/../logs/ratelimit');
+echo "  Done.\n\n";
+
 // STEP 1: Open system — should show setup
 echo "--- STEP 1: System Startup (no admin) ---\n";
 $r = api("$base/api/me.php");

@@ -1,0 +1,5 @@
+# Block web access to internal/test/reset scripts
+# Files prefixed with underscore are internal and must not be accessed via HTTP
+<FilesMatch "^_">
+    Require all denied
+</FilesMatch>

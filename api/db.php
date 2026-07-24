@@ -290,14 +290,7 @@ try {
     // ignore
 }
 
-// Auto-migration: ensure expenses table has correct schema (runs once per schema version)
-try {
-    // Check if expenses table exists
-    $st = $pdo->query('SELECT 1 FROM expenses LIMIT 1');
-    $tableExists = true;
-} catch (PDOException $e) {
-    $tableExists = false;
-}
+// Auto-migration: ensure expenses table exists (safe — IF NOT EXISTS)
 $createTableSQL = 'CREATE TABLE IF NOT EXISTS expenses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     category VARCHAR(50) NOT NULL,
@@ -309,29 +302,10 @@ $createTableSQL = 'CREATE TABLE IF NOT EXISTS expenses (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
-if ($tableExists) {
-    try {
-        $cols = $pdo->query('SHOW COLUMNS FROM expenses')->fetchAll(PDO::FETCH_COLUMN, 0);
-        if (in_array('title', $cols, true)) {
-            // Old schema detected: back up data and recreate
-            $pdo->exec('RENAME TABLE expenses TO expenses_backup');
-            $pdo->exec($createTableSQL);
-        }
-    } catch (PDOException $e) {
-        // ignore
-    }
-} else {
-    try {
-        $pdo->exec($createTableSQL);
-    } catch (PDOException $e) {
-        // ignore
-    }
-}
-// Clean up legacy expense_categories table (safe no-op if absent)
 try {
-    $pdo->exec('DROP TABLE IF EXISTS expense_categories');
+    $pdo->exec($createTableSQL);
 } catch (PDOException $e) {
-    // ignore
+    // ignore — table already exists or DB not ready
 }
 
 function ensure_shop_settings(PDO $pdo): array

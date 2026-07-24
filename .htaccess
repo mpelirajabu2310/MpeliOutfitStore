@@ -9,6 +9,16 @@ php_value error_log /var/log/php_errors.log
 # Set PHP error reporting
 php_value error_reporting -1
 
+# Block access to SQL files — must never be served via HTTP
+<FilesMatch "\.sql$">
+    Require all denied
+</FilesMatch>
+
+# Block access to migration/deployment scripts
+<FilesMatch "^(database\.sql|database_clean\.sql|migrate_)">
+    Require all denied
+</FilesMatch>
+
 # Enable gzip compression
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json

@@ -205,6 +205,7 @@ function showApp() {
   document.querySelector("#appShell").classList.remove("hidden");
   setTheme(getStoredTheme());
   applyRoleUI();
+  history.pushState({ page: "app" }, "", location.href);
 }
 
 function showLogin(ownerExists = true) {
@@ -723,8 +724,8 @@ function downloadPdfReport() {
   const generatorName = document.querySelector("#reportGeneratedBy")?.textContent || "";
   const footerHtml = receiptFooterGlobal ? `<p style="color:#888;font-size:12px;text-align:center;margin-top:20px;border-top:1px solid #ddd;padding-top:12px;">${escapeHtml(receiptFooterGlobal)}</p>` : "";
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(shopNameGlobal)} Report</title><style>
-    body { font: 14px/1.5 sans-serif; color: #222; max-width: 900px; margin: 20px auto; padding: 20px; }
-    h1 { color: #c9a24e; border-bottom: 2px solid #c9a24e; padding-bottom: 8px; }
+    body { font: 14px/1.5 'Inter', sans-serif; color: #222; max-width: 900px; margin: 20px auto; padding: 20px; }
+    h1 { font-family: 'Poppins', sans-serif; color: #c9a24e; border-bottom: 2px solid #c9a24e; padding-bottom: 8px; }
     table { width: 100%; border-collapse: collapse; margin: 16px 0; }
     th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
     th { background: #f5f3ee; font-weight: 700; }
@@ -883,6 +884,7 @@ document.querySelector("#loginForm")?.addEventListener("submit", async event => 
     });
     if (payload.csrf_token) storeCsrfToken(payload.csrf_token);
     currentUser = payload.user;
+    document.querySelector("#loginForm").reset();
     showApp();
     showToast(t("login.welcome") + ", " + currentUser.name + "!");
     await refreshAppData();
@@ -938,57 +940,131 @@ document.querySelector("#resetPasswordForm")?.addEventListener("submit", async e
   }
 });
 
+let recoveryToken = null;
+
+function openRecoveryModal() {
+  const modal = document.querySelector("#recoveryModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  document.querySelector("#recoveryStep1")?.classList.remove("hidden");
+  document.querySelector("#recoveryStep2")?.classList.add("hidden");
+  document.querySelector("#recoverySuccess")?.classList.add("hidden");
+  document.querySelector("#recoveryVerifyForm")?.reset();
+  document.querySelector("#recoveryResetForm")?.reset();
+  const r1 = document.querySelector("#recoveryStep1Result");
+  const r2 = document.querySelector("#recoveryStep2Result");
+  if (r1) r1.textContent = "";
+  if (r2) r2.textContent = "";
+  recoveryToken = null;
+  document.querySelector("#recoveryUsername")?.focus();
+}
+
 function closeRecoveryModal() {
   document.querySelector("#recoveryModal")?.classList.add("hidden");
-  document.querySelector("#recoveryForm")?.reset();
-  const result = document.querySelector("#recoveryResult");
-  if (result) result.textContent = "";
+  recoveryToken = null;
 }
 
 document.querySelector("#recoveryLink")?.addEventListener("click", e => {
   e.preventDefault();
-  document.querySelector("#recoveryModal")?.classList.remove("hidden");
+  openRecoveryModal();
 });
 document.querySelector("#recoveryClose")?.addEventListener("click", closeRecoveryModal);
 document.querySelector("#recoveryCancel")?.addEventListener("click", closeRecoveryModal);
+document.querySelector("#recoveryBackToVerify")?.addEventListener("click", () => {
+  document.querySelector("#recoveryStep1")?.classList.remove("hidden");
+  document.querySelector("#recoveryStep2")?.classList.add("hidden");
+  const r2 = document.querySelector("#recoveryStep2Result");
+  if (r2) r2.textContent = "";
+});
 document.querySelector("#recoveryModal")?.addEventListener("click", e => {
   if (e.target === e.currentTarget) closeRecoveryModal();
 });
 
-document.querySelector("#recoveryForm")?.addEventListener("submit", async event => {
+// Step 1: Verify Identity
+document.querySelector("#recoveryVerifyForm")?.addEventListener("submit", async event => {
   event.preventDefault();
-  const passcode = document.querySelector("#recoveryPasscode")?.value?.trim();
-  const result = document.querySelector("#recoveryResult");
-  if (!passcode) return;
+  const username = document.querySelector("#recoveryUsername")?.value?.trim();
+  const email = document.querySelector("#recoveryEmail")?.value?.trim();
+  const result = document.querySelector("#recoveryStep1Result");
+  if (!username || !email || !result) return;
 
   try {
     const response = await fetch("api/recover_owner.php", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passcode }),
+      body: JSON.stringify({ action: "verify", username, email }),
     });
     const data = await response.json();
     if (data.success) {
-      if (result) {
-        result.style.color = "var(--success)";
-        result.textContent = t("recovery.success", {
-          username: data.username,
-          password: data.new_password,
-          hint: data.hint,
-        });
-      }
+      result.style.color = "var(--success)";
+      result.textContent = data.message || t("recovery.identityVerified");
+      recoveryToken = data.token || null;
+      setTimeout(() => {
+        document.querySelector("#recoveryStep1")?.classList.add("hidden");
+        document.querySelector("#recoveryStep2")?.classList.remove("hidden");
+        document.querySelector("#recoveryNewPassword")?.focus();
+      }, 600);
     } else {
-      if (result) {
-        result.style.color = "var(--danger)";
-        result.textContent = data.message || t("recovery.failed");
-      }
+      result.style.color = "var(--danger)";
+      result.textContent = data.message || t("recovery.accountNotFound");
     }
   } catch (error) {
-    if (result) {
-      result.style.color = "var(--danger)";
-      result.textContent = t("recovery.failed");
-    }
+    result.style.color = "var(--danger)";
+    result.textContent = t("recovery.failed");
   }
+});
+
+// Step 2: Reset Password
+document.querySelector("#recoveryResetForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const newPassword = document.querySelector("#recoveryNewPassword")?.value;
+  const confirmPassword = document.querySelector("#recoveryConfirmPassword")?.value;
+  const result = document.querySelector("#recoveryStep2Result");
+  if (!newPassword || !confirmPassword || !result) return;
+
+  if (newPassword !== confirmPassword) {
+    result.style.color = "var(--danger)";
+    result.textContent = t("recovery.passwordsDontMatch");
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    result.style.color = "var(--danger)";
+    result.textContent = t("recovery.passwordTooShort");
+    return;
+  }
+
+  if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+    result.style.color = "var(--danger)";
+    result.textContent = t("recovery.passwordRequirements");
+    return;
+  }
+
+  try {
+    const response = await fetch("api/recover_owner.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reset", token: recoveryToken, new_password: newPassword, confirm_password: confirmPassword }),
+    });
+    const data = await response.json();
+    if (data.success) {
+      document.querySelector("#recoveryStep2")?.classList.add("hidden");
+      document.querySelector("#recoverySuccess")?.classList.remove("hidden");
+      recoveryToken = null;
+    } else {
+      result.style.color = "var(--danger)";
+      result.textContent = data.message || t("recovery.failed");
+    }
+  } catch (error) {
+    result.style.color = "var(--danger)";
+    result.textContent = t("recovery.failed");
+  }
+});
+
+// Back to Login from success screen
+document.querySelector("#recoveryBackToLogin")?.addEventListener("click", () => {
+  closeRecoveryModal();
+  document.querySelector("#loginUsername")?.focus();
 });
 
 // Password toggle functionality
@@ -1042,6 +1118,7 @@ document.querySelector("#ownerSetupForm")?.addEventListener("submit", async even
       const payload = await apiRequest("api/me.php");
       if (payload.authenticated) {
         currentUser = payload.user;
+        document.querySelector("#ownerSetupForm").reset();
         showApp();
         await refreshAppData();
         startDashboardAutoRefresh();
@@ -1129,7 +1206,11 @@ document.querySelector("#logoutButton")?.addEventListener("click", async () => {
   cart.clear();
   discountPrices.clear();
   clearCsrfToken();
+  document.querySelector("#loginForm")?.reset();
+  document.querySelector("#ownerSetupForm")?.reset();
+  document.querySelectorAll("#loginScreen input").forEach(input => { input.value = ""; });
   showLogin(true);
+  history.pushState({ page: "login" }, "", location.href);
 });
 
 document.querySelectorAll(".language-switcher").forEach(select => {
@@ -1137,6 +1218,14 @@ document.querySelectorAll(".language-switcher").forEach(select => {
 });
 
 document.querySelector("#themeToggle")?.addEventListener("click", toggleTheme);
+
+// Back-button protection: redirect to login if user is not authenticated
+window.addEventListener("popstate", (e) => {
+  if (!currentUser) {
+    history.replaceState({ page: "login" }, "", location.href);
+    showLogin(true);
+  }
+});
 
 function performSearch(query) {
   const q = query.trim().toLowerCase();
