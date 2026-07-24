@@ -1773,6 +1773,7 @@ select { min-height: 44px; appearance: auto; }
   .pos-cart-section { order: 0; }
 
   .expense-layout { grid-template-columns: 1fr; }
+  .expense-layout > * { min-width: 0; }
 
   .dashboard-grid { grid-template-columns: 1fr; }
 
@@ -1829,6 +1830,8 @@ select { min-height: 44px; appearance: auto; }
 
   .expense-form, .settings-card { gap: 16px; }
   .expense-form label, .settings-card label { gap: 10px; }
+
+  .expense-layout > .panel { overflow: hidden; }
 
   .report-grid .panel strong { font-size: 24px; }
 
