@@ -273,41 +273,6 @@ function owner_exists(PDO $pdo): bool
     return (int)$pdo->query('SELECT COUNT(*) FROM users WHERE role = "OWNER"')->fetchColumn() > 0;
 }
 
-// Auto-migration: add pricing columns if missing
-try {
-    $pdo->exec('ALTER TABLE products ADD COLUMN minimum_allowed_selling_price DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER selling_price');
-} catch (PDOException $e) {
-    // Column already exists — ignore
-}
-try {
-    $pdo->exec('ALTER TABLE sale_items ADD COLUMN original_selling_price DECIMAL(12,2) DEFAULT NULL AFTER selling_price');
-} catch (PDOException $e) {
-    // ignore
-}
-try {
-    $pdo->exec('ALTER TABLE sale_items ADD COLUMN discount_applied TINYINT(1) NOT NULL DEFAULT 0 AFTER original_selling_price');
-} catch (PDOException $e) {
-    // ignore
-}
-
-// Auto-migration: ensure expenses table exists (safe — IF NOT EXISTS)
-$createTableSQL = 'CREATE TABLE IF NOT EXISTS expenses (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    category VARCHAR(50) NOT NULL,
-    expense_name VARCHAR(255) DEFAULT NULL,
-    description TEXT DEFAULT NULL,
-    amount DECIMAL(12,2) NOT NULL,
-    expense_date DATE NOT NULL,
-    created_by BIGINT UNSIGNED NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
-try {
-    $pdo->exec($createTableSQL);
-} catch (PDOException $e) {
-    // ignore — table already exists or DB not ready
-}
-
 function ensure_shop_settings(PDO $pdo): array
 {
     $row = $pdo->query('SELECT * FROM shop_settings ORDER BY id LIMIT 1')->fetch();
