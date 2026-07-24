@@ -292,6 +292,8 @@
   "status.pending": "Pending",
   "status.cancelled": "Cancelled",
   "status.refunded": "Refunded",
+  "status.online": "Online",
+  "status.offline": "Offline",
   "table.amount": "Amount",
   "table.customerType": "Customer Type",
   "table.product": "Product",
@@ -316,5 +318,15 @@
   "users.noUsers": "No users yet.",
   "users.registerEmployee": "Register employee",
   "users.role": "Role",
-  "users.title": "User Management"
+  "users.title": "User Management",
+  "profile.username": "Username",
+  "profile.email": "Email",
+  "profile.role": "Role",
+  "profile.status": "Status",
+  "profile.userId": "User ID",
+  "idle.title": "Session Expiring",
+  "idle.message": "You have been inactive. Your session will expire in <strong id=\"idleCountdown\">60</strong> seconds.",
+  "idle.stay": "Stay Logged In",
+  "idle.loggedOut": "Logged out due to inactivity.",
+  "common.close": "Close"
 }

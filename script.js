@@ -195,6 +195,19 @@ function applyRoleUI() {
         .slice(0, 2)
         .toUpperCase();
     }
+
+    updateTopbarStoreName();
+    updateOnlineStatus();
+    updateReceiptFooter();
+  }
+}
+
+function updateReceiptFooter() {
+  const el = document.getElementById("receiptStoreRole");
+  if (el && currentUser) {
+    const storeName = shopNameGlobal || "Mpeli Outfit Store";
+    const roleLabel = currentUser.role === "OWNER" ? "Admin" : "Seller";
+    el.textContent = storeName + " - " + roleLabel;
   }
 }
 
@@ -205,6 +218,11 @@ function showApp() {
   document.querySelector("#appShell").classList.remove("hidden");
   setTheme(getStoredTheme());
   applyRoleUI();
+  startClock();
+  setupUserDropdown();
+  updateOnlineStatus();
+  updateTopbarPageTitle("dashboard");
+  startIdleTimer();
   history.pushState({ page: "app" }, "", location.href);
 }
 
@@ -213,6 +231,8 @@ function showLogin(ownerExists = true) {
   document.querySelector("#maintenanceScreen")?.classList.add("hidden");
   document.querySelector("#loginScreen").classList.remove("hidden");
   document.querySelector("#appShell").classList.add("hidden");
+  stopClock();
+  stopIdleTimer();
   
   if (ownerExists) {
     document.querySelector("#loginForm").classList.remove("hidden");
@@ -602,7 +622,7 @@ async function loadReports() {
       let total = 0;
       container.innerHTML = payload.expense_categories.map(c => {
         total += Number(c.total);
-        return `<div class="fin-row"><span>${escapeHtml(t("expenseCategory." + c.category) || c.category)}</span><strong>${money(c.total)}</strong></div>`;
+        return `<div class="fin-row"><span>${escapeHtml(t("expenseCategory." + c.category.toLowerCase()) || c.category)}</span><strong>${money(c.total)}</strong></div>`;
       }).join("") + `<div class="fin-row fin-divider"><span>${t("expenses.thisMonth")}</span><strong>${money(total)}</strong></div>`;
     }
   }
@@ -679,6 +699,8 @@ async function loadSettings() {
   receiptFooterGlobal = payload.shop.receipt_footer || "";
   const sidebarTitle = document.querySelector(".sidebar-title");
   if (sidebarTitle) sidebarTitle.textContent = shopNameGlobal;
+  updateTopbarStoreName();
+  updateReceiptFooter();
 }
 
 async function saveSettings() {
@@ -708,6 +730,7 @@ async function saveSettings() {
   receiptFooterGlobal = document.querySelector("#receiptFooter")?.value || "";
   const sidebarTitle = document.querySelector(".sidebar-title");
   if (sidebarTitle) sidebarTitle.textContent = shopNameGlobal;
+  updateTopbarStoreName();
   applyRoleUI();
   await refreshAppData();
 }
@@ -757,24 +780,35 @@ async function loadExpenses() {
   const body = document.querySelector("#expensesBody");
   if (!body) return;
   if (!payload.expenses?.length) {
-    body.innerHTML = `<tr><td colspan="6">${t("expenses.noExpenses")}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="ecl-desktop">${t("expenses.noExpenses")}</td><td class="ecl-mobile-card ecl-empty">${t("expenses.noExpenses")}</td></tr>`;
     return;
   }
   body.innerHTML = payload.expenses.map(e => {
-    const actions = isOwner()
-      ? `<td class="owner-only">
-          <button type="button" class="ghost-button" data-edit-expense="${e.id}" style="padding:4px 8px;font-size:11px">${t("users.edit")}</button>
-          <button type="button" class="ghost-button" data-delete-expense="${e.id}" style="padding:4px 8px;font-size:11px;color:var(--danger)">${t("products.delete")}</button>
-        </td>`
-      : "";
     const displayCategory = e.expense_name || e.category;
+    const actionsHtml = isOwner()
+      ? `<div class="ecl-actions">
+          <button type="button" class="ghost-button" data-edit-expense="${e.id}">${t("users.edit")}</button>
+          <button type="button" class="ghost-button" data-delete-expense="${e.id}" style="color:var(--danger)">${t("products.delete")}</button>
+        </div>`
+      : "";
     return `<tr>
-      <td>${escapeHtml(e.expense_date)}</td>
-      <td>${escapeHtml(displayCategory)}</td>
-      <td>${escapeHtml(e.description) || "-"}</td>
-      <td>${money(e.amount)}</td>
-      <td>${escapeHtml(e.created_by_name)}</td>
-      ${actions}
+      <td class="ecl-desktop">${escapeHtml(e.expense_date)}</td>
+      <td class="ecl-desktop">${escapeHtml(displayCategory)}</td>
+      <td class="ecl-desktop">${escapeHtml(e.description) || "-"}</td>
+      <td class="ecl-desktop">${money(e.amount)}</td>
+      <td class="ecl-desktop">${escapeHtml(e.created_by_name)}</td>
+      <td class="ecl-desktop owner-only">
+        <button type="button" class="ghost-button" data-edit-expense="${e.id}" style="padding:4px 8px;font-size:11px">${t("users.edit")}</button>
+        <button type="button" class="ghost-button" data-delete-expense="${e.id}" style="padding:4px 8px;font-size:11px;color:var(--danger)">${t("products.delete")}</button>
+      </td>
+      <td class="ecl-mobile-card">
+        <span class="ecl-label">${t("table.date")}</span><span class="ecl-value">${escapeHtml(e.expense_date)}</span>
+        <span class="ecl-label">${t("table.category")}</span><span class="ecl-value">${escapeHtml(displayCategory)}</span>
+        <span class="ecl-label">${t("expenses.descriptionLabel")}</span><span class="ecl-value">${escapeHtml(e.description) || "-"}</span>
+        <span class="ecl-label">${t("table.amount")}</span><span class="ecl-amount">${money(e.amount)}</span>
+        <span class="ecl-label">${t("users.name")}</span><span class="ecl-value">${escapeHtml(e.created_by_name)}</span>
+        ${actionsHtml}
+      </td>
     </tr>`;
   }).join("");
 }
@@ -1789,6 +1823,259 @@ async function generateReport(format, startDate, endDate) {
   document.querySelector('[data-page="reports"]')?.classList.add("active");
   showToast(t("reports.generatedReport"));
 }
+
+// ── Live Clock + Date + Online Status + Dropdown ───────────
+let clockInterval = null;
+
+function updateClock() {
+  const now = new Date();
+  const timeEl = document.querySelector("#clockTime");
+  const dateEl = document.querySelector("#clockDate");
+  if (timeEl) {
+    timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  if (dateEl) {
+    dateEl.textContent = now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  }
+}
+
+function startClock() {
+  if (clockInterval) return;
+  updateClock();
+  clockInterval = setInterval(updateClock, 1000);
+}
+
+function stopClock() {
+  if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+}
+
+function updateOnlineStatus() {
+  const dot = document.querySelector("#statusDot");
+  const text = document.querySelector("#statusText");
+  if (!dot || !text) return;
+  if (navigator.onLine) {
+    dot.classList.remove("offline");
+    text.textContent = t("status.online") || "Online";
+  } else {
+    dot.classList.add("offline");
+    text.textContent = t("status.offline") || "Offline";
+  }
+}
+
+window.addEventListener("online", updateOnlineStatus);
+window.addEventListener("offline", updateOnlineStatus);
+
+function updateTopbarStoreName() {
+  const el = document.querySelector("#topbarStoreName");
+  if (el && shopNameGlobal) el.textContent = shopNameGlobal;
+}
+
+function updateTopbarPageTitle(pageName) {
+  const el = document.querySelector("#topbarPageTitle");
+  if (!el) return;
+  const titleMap = {
+    dashboard: "nav.dashboard",
+    products: "nav.products",
+    sales: "nav.sales",
+    expenses: "nav.expenses",
+    reports: "nav.reports",
+    inventory: "nav.inventory",
+    users: "nav.users",
+    settings: "nav.settings"
+  };
+  const key = titleMap[pageName];
+  if (key) {
+    const translated = t(key);
+    el.textContent = translated !== key ? translated : pageName.charAt(0).toUpperCase() + pageName.slice(1);
+  } else {
+    el.textContent = pageName;
+  }
+}
+
+// Dropdown toggle
+function setupUserDropdown() {
+  const trigger = document.querySelector("#topbarUser");
+  const dropdown = document.querySelector("#userDropdown");
+  if (!trigger || !dropdown) return;
+
+  function openDropdown() {
+    dropdown.classList.remove("hidden");
+    trigger.classList.add("open");
+  }
+
+  function closeDropdown() {
+    dropdown.classList.add("hidden");
+    trigger.classList.remove("open");
+  }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = !dropdown.classList.contains("hidden");
+    if (isOpen) {
+      closeDropdown();
+    } else {
+      openDropdown();
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!trigger.contains(e.target) && !dropdown.contains(e.target)) {
+      closeDropdown();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDropdown();
+  });
+
+  document.querySelector("#dropdownProfile")?.addEventListener("click", () => closeDropdown());
+  document.querySelector("#changePasswordButton")?.addEventListener("click", () => closeDropdown());
+  document.querySelector("#dropdownSettings")?.addEventListener("click", () => {
+    closeDropdown();
+    document.querySelector(".nav-item[data-page='settings']")?.click();
+  });
+  document.querySelector("#logoutButton")?.addEventListener("click", () => closeDropdown());
+}
+
+// Hook into nav clicks to update page title
+const _origNavClick = document.querySelectorAll(".nav-item");
+_origNavClick.forEach(btn => {
+  btn.addEventListener("click", () => {
+    const page = btn.dataset.page;
+    if (page) updateTopbarPageTitle(page);
+  });
+});
+
+// ── Profile Modal ───────────────────────────────────────────
+function openProfileModal() {
+  if (!currentUser) return;
+  const modal = document.querySelector("#profileModal");
+  if (!modal) return;
+
+  const initials = currentUser.name.split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
+
+  document.querySelector("#profileModalAvatar").textContent = initials;
+  document.querySelector("#profileModalName").textContent = currentUser.name;
+  document.querySelector("#profileModalUsername").textContent = currentUser.username || "—";
+  document.querySelector("#profileModalEmail").textContent = currentUser.email || "—";
+
+  const roleEl = document.querySelector("#profileModalRole");
+  roleEl.textContent = currentUser.role;
+  roleEl.className = "role-badge role-" + currentUser.role.toLowerCase();
+
+  document.querySelector("#profileModalRoleText").textContent = currentUser.role;
+
+  const statusEl = document.querySelector("#profileModalStatus");
+  statusEl.textContent = currentUser.status || "active";
+  statusEl.style.color = currentUser.status === "active" ? "#22c55e" : "#ef4444";
+
+  document.querySelector("#profileModalId").textContent = "#" + currentUser.id;
+
+  modal.classList.remove("hidden");
+}
+
+function closeProfileModal() {
+  document.querySelector("#profileModal")?.classList.add("hidden");
+}
+
+document.querySelector("#profileModalClose")?.addEventListener("click", closeProfileModal);
+document.querySelector("#profileModal")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeProfileModal();
+});
+
+document.querySelector("#dropdownProfile")?.addEventListener("click", () => {
+  document.querySelector("#userDropdown")?.classList.add("hidden");
+  document.querySelector("#topbarUser")?.classList.remove("open");
+  openProfileModal();
+});
+
+// ── Idle Timer: Auto-logout after 3 minutes ────────────────
+const IDLE_TIMEOUT = 3 * 60 * 1000;       // 3 minutes
+const WARNING_BEFORE = 60 * 1000;          // warn 60s before logout
+let idleTimer = null;
+let warningTimer = null;
+let countdownInterval = null;
+let idleWarningShowing = false;
+
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  clearTimeout(warningTimer);
+  clearInterval(countdownInterval);
+  idleWarningShowing = false;
+
+  document.querySelector("#idleWarningModal")?.classList.add("hidden");
+
+  idleTimer = setTimeout(() => {
+    showIdleWarning();
+  }, IDLE_TIMEOUT - WARNING_BEFORE);
+}
+
+function showIdleWarning() {
+  if (!currentUser) return;
+  idleWarningShowing = true;
+
+  const modal = document.querySelector("#idleWarningModal");
+  const countdownEl = document.querySelector("#idleCountdown");
+  if (!modal || !countdownEl) return;
+
+  modal.classList.remove("hidden");
+
+  let remaining = WARNING_BEFORE / 1000;
+  countdownEl.textContent = remaining;
+
+  countdownInterval = setInterval(() => {
+    remaining--;
+    countdownEl.textContent = remaining;
+    if (remaining <= 0) {
+      clearInterval(countdownInterval);
+      forceLogout("idle_timeout");
+    }
+  }, 1000);
+}
+
+function forceLogout(reason) {
+  clearInterval(countdownInterval);
+  clearTimeout(idleTimer);
+  clearTimeout(warningTimer);
+
+  document.querySelector("#idleWarningModal")?.classList.add("hidden");
+
+  apiRequest("api/logout.php", { method: "POST" }).catch(() => {});
+
+  currentUser = null;
+  products = [];
+  cart.clear();
+  discountPrices.clear();
+  clearCsrfToken();
+  document.querySelector("#loginForm")?.reset();
+  document.querySelector("#ownerSetupForm")?.reset();
+  document.querySelectorAll("#loginScreen input").forEach(input => { input.value = ""; });
+  showLogin(true);
+
+  showToast(reason === "idle_timeout"
+    ? (t("idle.loggedOut") || "Logged out due to inactivity.")
+    : "Session expired.");
+}
+
+function startIdleTimer() {
+  const activityEvents = ["mousedown", "keydown", "touchstart", "scroll", "mousemove"];
+  activityEvents.forEach(event => {
+    document.addEventListener(event, resetIdleTimer, { passive: true });
+  });
+  resetIdleTimer();
+}
+
+function stopIdleTimer() {
+  clearTimeout(idleTimer);
+  clearTimeout(warningTimer);
+  clearInterval(countdownInterval);
+  idleWarningShowing = false;
+  document.querySelector("#idleWarningModal")?.classList.add("hidden");
+}
+
+document.querySelector("#idleStayBtn")?.addEventListener("click", () => {
+  resetIdleTimer();
+});
 
 let dashboardRefreshTimer = null;
 let shopNameGlobal = "Mpeli Outfit Store";

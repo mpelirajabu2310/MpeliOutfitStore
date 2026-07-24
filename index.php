@@ -25,7 +25,7 @@ $timestamp = time();
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <link rel="stylesheet" href="styles.css?v=<?php echo $timestamp; ?>&bust=2" />
+  <link rel="stylesheet" href="styles.css?v=<?php echo $timestamp; ?>&bust=3" />
 </head>
 <body>
   <div class="splash-screen" id="splashScreen">
@@ -142,22 +142,50 @@ $timestamp = time();
     <section class="workspace">
       <header class="topbar">
         <button class="menu-button" id="menuButton" aria-label="Toggle menu" data-i18n-aria-label="aria.toggleMenu"><i class="bi bi-list hamburger-icon" aria-hidden="true"></i></button>
-        <div class="search-box">
-          <span data-i18n="common.search">Search</span>
-          <input type="search" placeholder="Products, receipts, expenses..." id="globalSearch" data-i18n-placeholder="search.globalPlaceholder" />
-          <button type="button" class="search-icon-btn" id="searchIconBtn" aria-label="Search"><i class="bi bi-search"></i></button>
+
+        <div class="topbar-left">
+          <img src="images/logo.png" alt="Logo" class="topbar-logo" />
+          <strong class="topbar-store-name" id="topbarStoreName">Mpeli Outfit Store</strong>
         </div>
-        <select class="language-switcher" id="appLanguageSwitcher" aria-label="Language" data-i18n-aria-label="settings.language"></select>
-        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme"><i class="bi bi-moon-stars"></i></button>
-        <div class="admin-profile">
-          <span id="profileAvatar" class="profile-avatar">--</span>
-          <div>
-            <strong id="profileName"></strong>
-            <small id="profileRole" class="role-badge"></small>
+
+        <div class="topbar-center">
+          <span class="topbar-page-title" id="topbarPageTitle" data-i18n="nav.dashboard">Dashboard</span>
+          <div class="search-box topbar-search">
+            <input type="search" placeholder="Search..." id="globalSearch" data-i18n-placeholder="search.globalPlaceholder" />
+            <button type="button" class="search-icon-btn" id="searchIconBtn" aria-label="Search"><i class="bi bi-search"></i></button>
+          </div>
+          <select class="language-switcher" id="appLanguageSwitcher" aria-label="Language" data-i18n-aria-label="settings.language"></select>
+          <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+
+        <div class="topbar-right">
+          <div class="topbar-status">
+            <span class="status-dot" id="statusDot"></span>
+            <span class="status-text" id="statusText" data-i18n="status.online">Online</span>
+          </div>
+
+          <div class="topbar-clock">
+            <span class="clock-time" id="clockTime">--:--</span>
+            <span class="clock-date" id="clockDate">---</span>
+          </div>
+
+          <div class="topbar-user" id="topbarUser">
+            <span id="profileAvatar" class="profile-avatar">--</span>
+            <div class="topbar-user-info">
+              <strong id="profileName"></strong>
+              <small id="profileRole" class="role-badge"></small>
+            </div>
+            <i class="bi bi-chevron-down topbar-chevron"></i>
+
+            <div class="user-dropdown hidden" id="userDropdown">
+              <button class="dropdown-item" id="dropdownProfile"><i class="bi bi-person"></i> View Profile</button>
+              <button class="dropdown-item" id="changePasswordButton"><i class="bi bi-key"></i> Change Password</button>
+              <button class="dropdown-item owner-only" id="dropdownSettings"><i class="bi bi-gear"></i> Settings</button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item dropdown-danger" id="logoutButton"><i class="bi bi-box-arrow-left"></i> Logout</button>
+            </div>
           </div>
         </div>
-        <button id="changePasswordButton" class="ghost-button" aria-label="Change password" title="Change password"><i class="bi bi-key"></i></button>
-        <button id="logoutButton" class="logout-button" data-i18n="nav.logout"><i class="bi bi-box-arrow-left"></i> Logout</button>
       </header>
       <main class="page active" id="dashboard">
         <div class="page-heading">
@@ -254,7 +282,7 @@ $timestamp = time();
             </label>
             <button class="gold-button full" id="completePaymentButton" data-i18n="sales.paymentCompleted">Payment completed</button>
             <p class="receipt-note" id="receiptNote" data-i18n="sales.readyCheckout">Ready for checkout.</p>
-            <p class="receipt-footer">Mpeli Outfit Store - Admin</p>
+            <p class="receipt-footer" id="receiptStoreRole"></p>
           </article>
         </section>
       </main>
@@ -379,10 +407,12 @@ $timestamp = time();
             <input placeholder="Expense name (for Other category)" id="expenseCustomName" class="hidden" data-i18n-placeholder="expenses.expenseNamePlaceholder" />
             <label class="sr-only" for="expenseDescription" data-i18n="expenses.descriptionLabel">Description</label>
             <input placeholder="Description (optional)" id="expenseDescription" data-i18n-placeholder="expenses.descriptionPlaceholder" />
-            <label class="sr-only" for="expenseAmountInput" data-i18n="table.amount">Amount</label>
-            <input placeholder="Amount" id="expenseAmountInput" type="number" min="0" step="1" data-i18n-placeholder="table.amount" />
-            <label class="sr-only" for="expenseDateInput" data-i18n="expenses.dateLabel">Date</label>
-            <input id="expenseDateInput" type="date" />
+            <div class="expense-date-amount">
+              <div><label class="sr-only" for="expenseAmountInput" data-i18n="table.amount">Amount</label>
+              <input placeholder="Amount" id="expenseAmountInput" type="number" min="0" step="1" data-i18n-placeholder="table.amount" /></div>
+              <div class="expense-date-wrap"><label class="sr-only" for="expenseDateInput" data-i18n="expenses.dateLabel">Date</label>
+              <input id="expenseDateInput" type="date" /></div>
+            </div>
             <p class="form-hint" id="expenseFormError" style="color:var(--danger);display:none"></p>
             <button class="gold-button full" id="saveExpenseButton" data-i18n="expenses.saveExpense">Save expense</button>
           </article>
@@ -399,7 +429,7 @@ $timestamp = time();
             <h3 data-i18n="expenses.recentExpenses">Recent Expenses</h3>
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="expense-scroll-table">
               <thead><tr><th data-i18n="table.date">Date</th><th data-i18n="table.category">Category</th><th data-i18n="expenses.descriptionLabel">Description</th><th data-i18n="table.amount">Amount</th><th data-i18n="users.name">Created By</th><th class="owner-only" data-i18n="users.actions">Actions</th></tr></thead>
               <tbody id="expensesBody">
                 <tr><td colspan="6" data-i18n="expenses.noExpenses">No expenses recorded yet.</td></tr>
@@ -450,7 +480,7 @@ $timestamp = time();
         </section>
         <div class="settings-actions">
           <p class="form-hint" id="settingsMessage" role="status"></p>
-          <button class="gold-button" type="button" id="saveSettingsButton" data-i18n="settings.saveSettings"><i class="bi bi-save-fill"></i> Save settings</button>
+          <button class="gold-button" type="button" id="saveSettingsButton"><i class="bi bi-save-fill"></i> Save Settings</button>
         </div>
       </main>
     </section>
@@ -553,6 +583,43 @@ $timestamp = time();
           <button type="submit" class="gold-button" data-i18n="auth.changePassword"><i class="bi bi-key"></i> Change Password</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Profile modal -->
+  <div class="modal-overlay hidden" id="profileModal">
+    <div class="modal-dialog" style="max-width:420px">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px">
+        <div class="profile-avatar" id="profileModalAvatar" style="width:64px;height:64px;font-size:24px;flex-shrink:0"></div>
+        <div>
+          <h3 id="profileModalName" style="margin:0;font-size:20px"></h3>
+          <span id="profileModalRole" class="role-badge" style="margin-top:4px"></span>
+        </div>
+      </div>
+      <div class="profile-details">
+        <div class="profile-row"><span class="profile-label"><i class="bi bi-person"></i> <span data-i18n="profile.username">Username</span></span><span id="profileModalUsername" class="profile-value"></span></div>
+        <div class="profile-row"><span class="profile-label"><i class="bi bi-envelope"></i> <span data-i18n="profile.email">Email</span></span><span id="profileModalEmail" class="profile-value"></span></div>
+        <div class="profile-row"><span class="profile-label"><i class="bi bi-shield-lock"></i> <span data-i18n="profile.role">Role</span></span><span id="profileModalRoleText" class="profile-value"></span></div>
+        <div class="profile-row"><span class="profile-label"><i class="bi bi-circle-fill" style="font-size:8px"></i> <span data-i18n="profile.status">Status</span></span><span id="profileModalStatus" class="profile-value"></span></div>
+        <div class="profile-row"><span class="profile-label"><i class="bi bi-hash"></i> <span data-i18n="profile.userId">User ID</span></span><span id="profileModalId" class="profile-value"></span></div>
+      </div>
+      <div class="modal-actions" style="margin-top:20px">
+        <button type="button" class="gold-button" id="profileModalClose"><i class="bi bi-x-lg"></i> <span data-i18n="common.close">Close</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Idle warning modal -->
+  <div class="modal-overlay hidden" id="idleWarningModal">
+    <div class="modal-dialog" style="max-width:380px;text-align:center">
+      <div style="margin-bottom:16px">
+        <i class="bi bi-exclamation-triangle" style="font-size:48px;color:var(--gold)"></i>
+      </div>
+      <h3 data-i18n="idle.title">Session Expiring</h3>
+      <p id="idleWarningText" style="margin:12px 0 20px;color:var(--text-secondary)" data-i18n="idle.message">You have been inactive. Your session will expire in <strong id="idleCountdown">60</strong> seconds.</p>
+      <div class="modal-actions" style="justify-content:center">
+        <button type="button" class="gold-button" id="idleStayBtn"><i class="bi bi-arrow-counterclockwise"></i> <span data-i18n="idle.stay">Stay Logged In</span></button>
+      </div>
     </div>
   </div>
 

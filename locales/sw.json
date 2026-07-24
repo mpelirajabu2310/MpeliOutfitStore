@@ -294,6 +294,8 @@
   "status.pending": "Inasubiri",
   "status.cancelled": "Imeghairiwa",
   "status.refunded": "Imerejeshwa",
+  "status.online": "Mtandaoni",
+  "status.offline": "Nje ya Mtandao",
   "table.amount": "Kiasi",
   "table.customerType": "Aina ya Mteja",
   "table.product": "Bidhaa",
@@ -318,5 +320,15 @@
   "users.noUsers": "Hakuna watumiaji bado.",
   "users.registerEmployee": "Sajili mfanyakazi",
   "users.role": "Jukumu",
-  "users.title": "Usimamizi wa Watumiaji"
+  "users.title": "Usimamizi wa Watumiaji",
+  "profile.username": "Jina la mtumiaji",
+  "profile.email": "Barua pepe",
+  "profile.role": "Jukumu",
+  "profile.status": "Hali",
+  "profile.userId": "Kitambulisho",
+  "idle.title": "Kipindi Kinaisha",
+  "idle.message": "Hujafanya chochote kwa muda. Kipindi chako kitaisha baada ya sekunde <strong id=\"idleCountdown\">60</strong>.",
+  "idle.stay": "Baki Umeingia",
+  "idle.loggedOut": "Umeondolewa kutokana na kutofanya chochote.",
+  "common.close": "Funga"
 }
