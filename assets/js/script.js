@@ -4,6 +4,113 @@ let translations = {};
 let currentLanguage = localStorage.getItem("preferredLanguage") || "en";
 const cart = new Map();
 const discountPrices = new Map();
+let promotions = [];
+let ownerPromotions = [];
+const promoByProduct = new Map();
+let bulkDiscountEnabled = false;
+let bulkDiscountPercent = 15;
+const MAX_BULK_PERCENT = 20;
+
+const CART_STORAGE_KEY = "pos.cart";
+const DISCOUNT_STORAGE_KEY = "pos.discounts";
+
+function saveCartState() {
+  try {
+    sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(Object.fromEntries(cart)));
+    sessionStorage.setItem(DISCOUNT_STORAGE_KEY, JSON.stringify(Object.fromEntries(discountPrices)));
+  } catch (e) {
+    console.warn("[cart] Unable to persist cart state:", e);
+  }
+}
+
+function restoreCartState() {
+  try {
+    const rawCart = sessionStorage.getItem(CART_STORAGE_KEY);
+    if (rawCart) {
+      const parsed = JSON.parse(rawCart);
+      cart.clear();
+      Object.entries(parsed).forEach(([id, qty]) => {
+        const n = Number(id);
+        const q = Number(qty);
+        if (Number.isFinite(n) && Number.isFinite(q) && q > 0) cart.set(n, q);
+      });
+    }
+    const rawDiscounts = sessionStorage.getItem(DISCOUNT_STORAGE_KEY);
+    if (rawDiscounts) {
+      const parsed = JSON.parse(rawDiscounts);
+      discountPrices.clear();
+      Object.entries(parsed).forEach(([id, price]) => {
+        const n = Number(id);
+        const p = Number(price);
+        if (Number.isFinite(n) && Number.isFinite(p) && p > 0) discountPrices.set(n, p);
+      });
+    }
+  } catch (e) {
+    console.warn("[cart] Unable to restore cart state:", e);
+  }
+}
+
+function capCartToStock() {
+  [...cart.entries()].forEach(([id, qty]) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    const capped = Math.max(0, Math.min(qty, product.stock));
+    if (capped === 0) cart.delete(id);
+    else cart.set(id, capped);
+  });
+  [...discountPrices.keys()].forEach(id => {
+    if (!cart.has(id) || !products.some(p => p.id === id)) discountPrices.delete(id);
+  });
+}
+
+function clearCartState() {
+  cart.clear();
+  discountPrices.clear();
+  try {
+    sessionStorage.removeItem(CART_STORAGE_KEY);
+    sessionStorage.removeItem(DISCOUNT_STORAGE_KEY);
+  } catch (e) {
+    console.warn("[cart] Unable to clear persisted cart state:", e);
+  }
+}
+
+const KNOWN_PAGES = ["dashboard", "products", "sales", "expenses", "inventory", "reports", "users", "settings"];
+
+function rememberPage(page) {
+  if (!KNOWN_PAGES.includes(page)) return;
+  try {
+    sessionStorage.setItem("app.lastPage", page);
+  } catch (e) {
+    console.warn("[nav] Unable to remember last page:", e);
+  }
+}
+
+function getLastPage() {
+  try {
+    const page = sessionStorage.getItem("app.lastPage");
+    return KNOWN_PAGES.includes(page) ? page : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function forgetLastPage() {
+  try {
+    sessionStorage.removeItem("app.lastPage");
+  } catch (e) {
+    console.warn("[nav] Unable to forget last page:", e);
+  }
+}
+
+let saleRequestKey = null;
+let expenseRequestKey = null;
+
+function generateRequestKey() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return "req-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+}
 
 function escapeHtml(str) {
   if (str == null) return "";
@@ -32,6 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (loginScreen) loginScreen.classList.remove("hidden");
   if (appShell) appShell.classList.add("hidden");
+
+  const expenseDateInput = document.querySelector("#expenseDateInput");
+  if (expenseDateInput) expenseDateInput.max = new Date().toISOString().slice(0, 10);
 }, { once: true });
 
 // Theme system
@@ -75,12 +185,17 @@ async function apiRequest(url, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const needsCsrf = ["POST", "PUT", "DELETE"].includes(method);
 
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
+  const headers = { ...(options.headers || {}) };
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
   if (needsCsrf && csrfToken) {
     headers["X-CSRF-Token"] = csrfToken;
+  }
+  // Background polling (chart refreshes, dashboard auto-updates) must not reset
+  // the server-side idle timer.
+  if (options.background) {
+    headers["X-Background"] = "1";
   }
 
   try {
@@ -104,7 +219,13 @@ async function apiRequest(url, options = {}) {
     if (payload.csrf_token) {
       storeCsrfToken(payload.csrf_token);
     }
-    
+
+    // The server rejected the session (idle timeout, logout in another tab).
+    // Log the user out gracefully instead of leaving a dead app shell.
+    if (response.status === 401 && currentUser && !/login\.php|register_owner\.php|recover_owner\.php/.test(url)) {
+      forceLogout("idle_timeout");
+    }
+
     if (!response.ok || payload.success === false) {
       const message = payload.message || "Request failed.";
       throw new Error(message);
@@ -175,6 +296,9 @@ function isOwner() {
 function applyRoleUI() {
   document.querySelectorAll(".owner-only").forEach(element => {
     element.classList.toggle("hidden", !isOwner());
+  });
+  document.querySelectorAll(".seller-only").forEach(element => {
+    element.classList.toggle("hidden", isOwner());
   });
 
   if (currentUser) {
@@ -351,88 +475,265 @@ async function loadProducts() {
   lowStockThreshold = payload.low_stock_threshold || 5;
   products = payload.products.map(normalizeProduct);
   console.log(`[loadProducts] Loaded ${products.length} products`, products.map(p => ({ id: p.id, name: p.name, stock: p.stock })));
-  cart.clear();
+  restoreCartState();
+  capCartToStock();
+  saveCartState();
   renderProducts();
   renderCart();
+}
+
+function productImageUrl(product) {
+  if (!product.image_path) return "";
+  return product.updated_at
+    ? product.image_path + "?v=" + encodeURIComponent(product.updated_at)
+    : product.image_path;
+}
+
+let productImgObserver = null;
+function getProductImgObserver() {
+  if (productImgObserver) return productImgObserver;
+  if (!("IntersectionObserver" in window)) return null;
+  productImgObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      const el = entry.target;
+      if (el.dataset.src) {
+        el.style.backgroundImage = `url("${el.dataset.src}")`;
+        delete el.dataset.src;
+      }
+      productImgObserver.unobserve(el);
+    });
+  }, { rootMargin: "300px" });
+  return productImgObserver;
+}
+
+function observeProductImages(container) {
+  const layers = container.querySelectorAll(".product-img-layer[data-src]");
+  const observer = getProductImgObserver();
+  if (!observer) {
+    layers.forEach((el) => {
+      el.style.backgroundImage = `url("${el.dataset.src}")`;
+      delete el.dataset.src;
+    });
+    return;
+  }
+  layers.forEach((el) => observer.observe(el));
+}
+
+function productCardHtml(product) {
+  const profitHtml = product.buying === null
+    ? ""
+    : `<span>${t("products.profit")} <strong>${money(product.selling - product.buying)}</strong></span>`;
+  const buyingHtml = product.buying === null
+    ? ""
+    : `<span>${t("products.buying")} <strong>${money(product.buying)}</strong></span>`;
+  const minPriceHtml = product.min_price > 0
+    ? `<span>Min sell <strong>${money(product.min_price)}</strong></span>`
+    : "";
+  const actions = isOwner()
+    ? `<div class="card-actions">
+        <button type="button" data-edit-product="${product.id}">${t("products.edit")}</button>
+        <button type="button" data-delete-product="${product.id}">${t("products.delete")}</button>
+      </div>`
+    : "";
+  const imageUrl = productImageUrl(product);
+  const imageLayer = imageUrl
+    ? `<div class="product-img-layer" data-src="${escapeHtml(imageUrl)}"></div>`
+    : `<div class="product-img-layer placeholder"><i class="bi bi-image"></i></div>`;
+
+  return `
+    <article class="product-card ${imageUrl ? "has-image" : "no-image"}">
+      ${imageLayer}
+      <div class="product-body">
+        <h3>${escapeHtml(product.name)} ${stockBadge(product)}</h3>
+        <div class="price-grid">
+          ${buyingHtml}
+          <span>${t("products.selling")} <strong>${money(product.selling)}</strong></span>
+          ${minPriceHtml}
+          ${profitHtml}
+          <span>${t("products.stock")} <strong>${product.stock}</strong></span>
+        </div>
+        ${actions}
+      </div>
+    </article>
+  `;
+}
+
+function posItemThumbHtml(product) {
+  const imageUrl = productImageUrl(product);
+  return imageUrl
+    ? `<img class="pos-thumb" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" />`
+    : `<span class="pos-thumb placeholder"><i class="bi bi-image"></i></span>`;
 }
 
 function renderProducts() {
   const grid = document.querySelector("#productGrid");
   if (!grid) return;
 
-  grid.innerHTML = products.map(product => {
-    const profitHtml = product.buying === null
-      ? ""
-      : `<span>${t("products.profit")} <strong>${money(product.selling - product.buying)}</strong></span>`;
-    const buyingHtml = product.buying === null
-      ? ""
-      : `<span>${t("products.buying")} <strong>${money(product.buying)}</strong></span>`;
-    const minPriceHtml = product.min_price > 0
-      ? `<span>Min sell <strong>${money(product.min_price)}</strong></span>`
-      : "";
-    const actions = isOwner()
-      ? `<div class="card-actions">
-          <button type="button" data-edit-product="${product.id}">${t("products.edit")}</button>
-          <button type="button" data-delete-product="${product.id}">${t("products.delete")}</button>
-        </div>`
-      : "";
+  grid.innerHTML = products.map(productCardHtml).join("") || `<article class="panel"><h3>${t("products.noProducts")}</h3><p>${t("products.startFresh")}</p></article>`;
 
-    return `
-      <article class="product-card">
-        <div class="product-body">
-          <h3>${escapeHtml(product.name)} ${stockBadge(product)}</h3>
-          <div class="price-grid">
-            ${buyingHtml}
-            <span>${t("products.selling")} <strong>${money(product.selling)}</strong></span>
-            ${minPriceHtml}
-            ${profitHtml}
-            <span>${t("products.stock")} <strong>${product.stock}</strong></span>
-          </div>
-          ${actions}
-        </div>
-      </article>
-    `;
-  }).join("") || `<article class="panel"><h3>${t("products.noProducts")}</h3><p>${t("products.startFresh")}</p></article>`;
+  observeProductImages(grid);
 }
 
 function renderPosProducts() {
-  document.querySelector("#posProducts").innerHTML = products.map((product, index) => {
+  document.querySelector("#posProducts").innerHTML = products.map(product => {
     const minPriceInfo = product.min_price > 0 && product.min_price < product.selling
       ? `<br><small>Min: ${money(product.min_price)}</small>`
       : "";
+    const promo = promoByProduct.get(product.id);
+    const promoBadge = promo ? `<span class="promo-badge">-${promo.percentage}%</span>` : "";
+    const priceHtml = promo
+      ? `<small><s>${money(product.selling)}</s> <strong class="promo-price">${money(promo.promo_price)}</strong> ${promoBadge}<br><small>${t("products.stock")} ${product.stock}</small></small>`
+      : `<small>${money(product.selling)} / ${t("products.stock")} ${product.stock}${minPriceInfo}</small>`;
     return `
     <article class="pos-item">
+      ${posItemThumbHtml(product)}
       <div>
         <strong>${escapeHtml(product.name)}</strong> ${stockBadge(product)}
-        <small>${money(product.selling)} / ${t("products.stock")} ${product.stock}${minPriceInfo}</small>
+        ${priceHtml}
       </div>
       <div class="qty-controls">
-        <button type="button" data-dec="${index}" aria-label="${t("common.decrease")} ${escapeHtml(product.name)}">-</button>
-        <span>${cart.get(index) || 0}</span>
-        <button type="button" data-inc="${index}" aria-label="${t("common.increase")} ${escapeHtml(product.name)}">+</button>
+        <button type="button" data-dec="${product.id}" aria-label="${t("common.decrease")} ${escapeHtml(product.name)}">-</button>
+        <span>${cart.get(product.id) || 0}</span>
+        <button type="button" data-inc="${product.id}" aria-label="${t("common.increase")} ${escapeHtml(product.name)}">+</button>
       </div>
     </article>
   `}).join("") || `<p class="empty-state">${t("products.noProducts")}</p>`;
 }
 
-function getFinalPrice(index) {
-  const product = products[index];
+function round2(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function getCartTotalQuantity() {
+  return [...cart.entries()].reduce((sum, [, qty]) => sum + Math.max(0, qty), 0);
+}
+
+function isBulkDiscountActive() {
+  return bulkDiscountEnabled && getCartTotalQuantity() >= 3;
+}
+
+function bulkPriceForNormal(id) {
+  const product = products.find(p => p.id === id);
   if (!product) return 0;
-  return discountPrices.has(index) ? discountPrices.get(index) : product.selling;
+  return Math.max(product.min_price, round2(product.selling * (100 - bulkDiscountPercent) / 100));
+}
+
+function getPromoForProduct(id) {
+  return promoByProduct.get(id) || null;
+}
+
+function getPricingType(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return "normal";
+  if (discountPrices.has(id)) return "existing_discount";
+  if (promoByProduct.has(id)) return "promotion";
+  if (isBulkDiscountActive() && bulkPriceForNormal(id) < product.selling) return "bulk_discount";
+  return "normal";
+}
+
+function getPromotionIdFor(id) {
+  const promo = promoByProduct.get(id);
+  return promo ? promo.promotion_id : null;
+}
+
+function getFinalPrice(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return 0;
+  if (discountPrices.has(id)) return discountPrices.get(id);
+  const promo = promoByProduct.get(id);
+  if (promo) return promo.promo_price;
+  if (isBulkDiscountActive()) {
+    const bp = bulkPriceForNormal(id);
+    if (bp < product.selling) return bp;
+  }
+  return product.selling;
+}
+
+function applyPromotionsToProducts() {
+  promoByProduct.clear();
+  if (!products.length) {
+    renderCart();
+    renderPosProducts();
+    return;
+  }
+  const productMap = new Map(products.map(p => [p.id, p]));
+  promotions.forEach(promo => {
+    const pct = Number(promo.percentage);
+    const apply = (product) => {
+      if (!product) return;
+      const price = Math.max(product.min_price, round2(product.selling * (100 - pct) / 100));
+      if (price < product.selling) {
+        promoByProduct.set(product.id, {
+          promotion_id: Number(promo.id),
+          name: promo.name,
+          percentage: pct,
+          promo_price: price
+        });
+      }
+    };
+    if (Number(promo.all_products) === 1) {
+      productMap.forEach(apply);
+    } else {
+      (promo.product_ids || []).forEach(pid => apply(productMap.get(Number(pid))));
+    }
+  });
+  renderCart();
+  renderPosProducts();
+  renderBulkPanel();
+}
+
+async function loadPromotions() {
+  const payload = await apiRequest("api/promotions.php?active=1");
+  promotions = payload.promotions || [];
+  applyPromotionsToProducts();
+}
+
+function renderBulkPanel() {
+  const wrap = document.querySelector("#bulkDiscountWrap");
+  if (!wrap) return;
+  const toggle = document.querySelector("#bulkDiscountToggle");
+  const input = document.querySelector("#bulkDiscountPercent");
+  const hint = document.querySelector("#bulkDiscountHint");
+  const count = getCartTotalQuantity();
+  const qualifies = count >= 3;
+  if (!qualifies) {
+    if (bulkDiscountEnabled) bulkDiscountEnabled = false;
+    if (toggle) {
+      toggle.checked = false;
+      toggle.disabled = true;
+    }
+    if (hint) hint.textContent = t("sales.bulkNeedsItems", { remaining: Math.max(0, 3 - count) });
+  } else {
+    if (toggle) {
+      toggle.disabled = false;
+      toggle.checked = bulkDiscountEnabled;
+    }
+    if (hint) hint.textContent = t("sales.bulkHint");
+  }
+  if (input) {
+    input.max = MAX_BULK_PERCENT;
+    input.value = bulkDiscountPercent;
+  }
 }
 
 function renderCart() {
   const list = document.querySelector("#cartList");
   let total = 0;
-  const lines = [...cart.entries()].filter(([, qty]) => qty > 0).map(([index, qty]) => {
-    const product = products[index];
-    const fp = getFinalPrice(index);
+  const lines = [...cart.entries()].filter(([, qty]) => qty > 0).map(([id, qty]) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return "";
+    const fp = getFinalPrice(id);
     total += fp * qty;
-    const hasDiscount = discountPrices.has(index);
-    const discountBtn = `<button type="button" class="ghost-button" style="padding:4px 8px;font-size:11px" data-discount="${index}">${hasDiscount ? "Discount: " + money(fp) : "Discount"}</button>`;
+    const pType = getPricingType(id);
+    const hasDiscount = fp < product.selling;
+    const promo = getPromoForProduct(id);
+    const promoBadge = pType === "promotion" && promo ? `<span class="promo-badge">-${promo.percentage}%</span>` : "";
+    const bulkBadge = pType === "bulk_discount" ? `<span class="promo-badge bulk">${t("sales.bulkLabel")} -${bulkDiscountPercent}%</span>` : "";
+    const discountBtn = `<button type="button" class="ghost-button" style="padding:4px 8px;font-size:11px" data-discount="${id}">${discountPrices.has(id) ? t("sales.discountSet") + ": " + money(fp) : t("sales.discountBtn")}</button>`;
     const priceDisplay = hasDiscount
-      ? `<span style="text-decoration:line-through;color:var(--text-secondary)">${money(product.selling)}</span> <strong>${money(fp)}</strong>`
-      : `<strong>${money(product.selling)}</strong>`;
+      ? `<span style="text-decoration:line-through;color:var(--text-secondary)">${money(product.selling)}</span> ${promoBadge}${bulkBadge} <strong>${money(fp)}</strong>`
+      : `<strong>${money(product.selling)}</strong> ${promoBadge}${bulkBadge}`;
     const minPriceInfo = hasDiscount ? "" : product.min_price > 0 && product.min_price < product.selling
       ? `<br><small style="color:var(--text-secondary)">Min: ${money(product.min_price)}</small>`
       : "";
@@ -443,15 +744,16 @@ function renderCart() {
       </span>
       <span>${priceDisplay} ${discountBtn}</span>
     </div>`;
-  });
+  }).filter(Boolean);
 
   list.innerHTML = lines.join("") || `<p class="receipt-note">${t("sales.noProductsSelected")}</p>`;
   document.querySelector("#saleTotal").textContent = money(total);
   let cartProfit = 0;
   if (isOwner()) {
-    [...cart.entries()].filter(([, qty]) => qty > 0).forEach(([index, qty]) => {
-      const product = products[index];
-      const fp = getFinalPrice(index);
+    [...cart.entries()].filter(([, qty]) => qty > 0).forEach(([id, qty]) => {
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+      const fp = getFinalPrice(id);
       cartProfit += (fp - (product.buying || 0)) * qty;
     });
     document.querySelector("#saleProfit").textContent = money(cartProfit);
@@ -459,6 +761,7 @@ function renderCart() {
     document.querySelector("#saleProfit").textContent = t("role.hidden");
   }
   renderPosProducts();
+  renderBulkPanel();
 }
 
 function formatChartDay(day) {
@@ -525,8 +828,8 @@ function renderStockAlerts(alerts) {
   }).join("");
 }
 
-async function loadDashboard() {
-  const payload = await apiRequest("api/dashboard.php");
+async function loadDashboard(options = {}) {
+  const payload = await apiRequest("api/dashboard.php", options);
   lowStockThreshold = payload.low_stock_threshold || 5;
   document.querySelector("#totalProducts").textContent = payload.stats.total_products;
   document.querySelector("#totalSales").textContent = payload.stats.total_sales;
@@ -578,11 +881,29 @@ async function loadDashboard() {
   renderBarChart(document.querySelector(".revenue-chart") || document.querySelector(".bar-chart"), payload.revenue_chart, payload.has_revenue_chart, "value");
   renderBarChart(document.querySelector(".profit-chart"), payload.profit_chart, payload.has_profit_chart, "value");
   renderBarChart(document.querySelector(".stock-chart"), payload.stock_chart, payload.has_stock_chart, "value");
+
+  renderSellerAnalytics(payload.analytics);
 }
 
-async function loadReports() {
-  if (!isOwner()) return;
-  const payload = await apiRequest("api/reports.php");
+function renderSellerAnalytics(analytics) {
+  const p = analytics?.periods;
+  if (!p) return;
+  const set = (id, val) => {
+    const el = document.querySelector(id);
+    if (el) el.textContent = money(val);
+  };
+  set("#analWeekSales", p.week?.sales);
+  set("#analWeekExpenses", p.week?.expenses);
+  set("#analMonthSales", p.month?.sales);
+  set("#analMonthExpenses", p.month?.expenses);
+  set("#analYearSales", p.year?.sales);
+  set("#analYearExpenses", p.year?.expenses);
+  set("#analTotalSales", p.total?.sales);
+  set("#analTotalExpenses", p.total?.expenses);
+}
+
+async function loadReports(options = {}) {
+  const payload = await apiRequest("api/reports.php", options);
   document.querySelector("#reportDailySales").textContent = money(payload.stats.daily_sales);
   document.querySelector("#reportWeeklySales").textContent = money(payload.stats.weekly_sales);
   document.querySelector("#reportMonthlySales").textContent = money(payload.stats.monthly_sales);
@@ -735,29 +1056,6 @@ async function saveSettings() {
   await refreshAppData();
 }
 
-function downloadPdfReport() {
-  const output = document.querySelector("#reportOutput");
-  if (!output || !output.innerHTML) {
-    showToast("No report generated yet. Click 'Generate Report' first.", "error");
-    return;
-  }
-  const win = window.open("", "_blank");
-  if (!win) { showToast("Please allow popups for PDF download.", "error"); return; }
-  const stamp = document.querySelector("#reportGeneratedAt")?.textContent || "";
-  const generatorName = document.querySelector("#reportGeneratedBy")?.textContent || "";
-  const footerHtml = receiptFooterGlobal ? `<p style="color:#888;font-size:12px;text-align:center;margin-top:20px;border-top:1px solid #ddd;padding-top:12px;">${escapeHtml(receiptFooterGlobal)}</p>` : "";
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(shopNameGlobal)} Report</title><style>
-    body { font: 14px/1.5 'Inter', sans-serif; color: #222; max-width: 900px; margin: 20px auto; padding: 20px; }
-    h1 { font-family: 'Poppins', sans-serif; color: #c9a24e; border-bottom: 2px solid #c9a24e; padding-bottom: 8px; }
-    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-    th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-    th { background: #f5f3ee; font-weight: 700; }
-    caption { font-weight: 700; margin: 8px 0; text-align: left; font-size: 15px; }
-    @media print { body { margin: 0; padding: 10px; } }
-  </style></head><body><h1>${escapeHtml(shopNameGlobal)}</h1><p>${escapeHtml(stamp)}</p><p>Generated by: ${escapeHtml(generatorName)}</p>${output.innerHTML}${footerHtml}<p style="color:#888;font-size:12px;text-align:center;margin-top:30px;">Generated on ${escapeHtml(new Date().toLocaleString())}</p><script>window.onload=function(){window.print()}<\/script></body></html>`);
-  win.document.close();
-}
-
 async function loadExpenses() {
   const payload = await apiRequest("api/expenses.php");
   document.querySelector("#expenseToday").textContent = money(payload.summary.today);
@@ -849,9 +1147,9 @@ function showToast(message, type) {
 }
 
 async function refreshAppData() {
-  const tasks = [loadProducts(), loadDashboard(), loadExpenses()];
+  const tasks = [loadProducts(), loadPromotions(), loadDashboard(), loadExpenses(), loadReports()];
   if (isOwner()) {
-    tasks.push(loadSettings(), loadUsers(), loadInventory(), loadReports(), loadMaintenanceStatus());
+    tasks.push(loadSettings(), loadUsers(), loadInventory(), loadMaintenanceStatus(), loadPromotionsOwner());
   }
   const results = await Promise.allSettled(tasks);
   let errors = 0;
@@ -866,42 +1164,69 @@ async function refreshAppData() {
   }
 }
 
-async function refreshFinancialData() {
-  const tasks = [loadDashboard()];
-  if (isOwner()) {
-    tasks.push(loadReports());
-  }
+async function refreshFinancialData(options = {}) {
+  const tasks = [loadDashboard(options), loadReports(options)];
   await Promise.allSettled(tasks);
 }
 
 async function completePayment() {
   const items = [...cart.entries()]
     .filter(([, quantity]) => quantity > 0)
-    .map(([index, quantity]) => ({
-      variant_id: products[index].variant_id,
-      quantity,
-      final_selling_price: getFinalPrice(index),
-      original_selling_price: products[index].selling
-    }));
+    .map(([id, quantity]) => {
+      const product = products.find(p => p.id === id);
+      if (!product) return null;
+      const item = {
+        variant_id: product.variant_id,
+        quantity,
+        pricing_type: getPricingType(id)
+      };
+      if (item.pricing_type === "existing_discount") {
+        item.final_selling_price = getFinalPrice(id);
+        item.original_selling_price = product.selling;
+      } else if (item.pricing_type === "promotion") {
+        item.promotion_id = getPromotionIdFor(id);
+      }
+      return item;
+    })
+    .filter(Boolean);
 
   if (items.length === 0) {
     document.querySelector("#receiptNote").textContent = t("sales.addBeforeCheckout");
     return;
   }
 
-  const payload = await apiRequest("api/sales.php", {
-    method: "POST",
-    body: JSON.stringify({
-      payment_method: document.querySelector("#paymentMethod").value,
-      items
-    })
-  });
+  const btn = document.querySelector("#completePaymentButton");
+  const originalLabel = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = t("common.processing");
+  }
 
-  cart.clear();
-  discountPrices.clear();
-  document.querySelector("#receiptNote").textContent = t("sales.paymentSaved", { receipt: payload.receipt_number });
-  showToast(t("sales.paymentSaved", { receipt: payload.receipt_number }));
-  await refreshAppData();
+  try {
+    if (!saleRequestKey) saleRequestKey = generateRequestKey();
+    const payload = await apiRequest("api/sales.php", {
+      method: "POST",
+      body: JSON.stringify({
+        payment_method: document.querySelector("#paymentMethod").value,
+        items,
+        bulk_discount_percent: isBulkDiscountActive() ? bulkDiscountPercent : null,
+        request_id: saleRequestKey
+      })
+    });
+
+    saleRequestKey = null;
+    clearCartState();
+    document.querySelector("#receiptNote").textContent = t("sales.paymentSaved", { receipt: payload.receipt_number });
+    showToast(t("sales.paymentSaved", { receipt: payload.receipt_number }));
+    await refreshAppData();
+  } catch (error) {
+    throw error;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  }
 }
 
 document.querySelector("#loginForm")?.addEventListener("submit", async event => {
@@ -1181,13 +1506,15 @@ document.querySelectorAll(".nav-item").forEach(button => {
     closeSidebar();
     // Load page-specific data immediately
     const page = button.dataset.page;
+    rememberPage(page);
     try {
       if (page === "dashboard") await loadDashboard();
-      else if (page === "products") await loadProducts();
-      else if (page === "sales") await loadProducts();
+      else if (page === "products") { await loadProducts(); await loadPromotions(); }
+      else if (page === "sales") { await loadProducts(); await loadPromotions(); }
+      else if (page === "promotions" && isOwner()) await loadPromotionsOwner();
       else if (page === "expenses") await loadExpenses();
       else if (page === "inventory" && isOwner()) await loadInventory();
-      else if (page === "reports" && isOwner()) await loadReports();
+      else if (page === "reports") await loadReports();
       else if (page === "users" && isOwner()) await loadUsers();
       else if (page === "settings" && isOwner()) await loadSettings();
     } catch (e) {
@@ -1235,10 +1562,12 @@ document.querySelector("#logoutButton")?.addEventListener("click", async () => {
   } catch (e) {
     console.warn("Logout API call failed, clearing local state anyway:", e);
   }
+  // Tell other open tabs the session has ended.
+  idleStorageSet(SESSION_LOGGED_OUT_KEY, String(Date.now()));
   currentUser = null;
   products = [];
-  cart.clear();
-  discountPrices.clear();
+  clearCartState();
+  forgetLastPage();
   clearCsrfToken();
   document.querySelector("#loginForm")?.reset();
   document.querySelector("#ownerSetupForm")?.reset();
@@ -1268,33 +1597,27 @@ function performSearch(query) {
   const grid = document.querySelector("#productGrid");
   if (!grid) return;
   grid.innerHTML = filtered.length
-    ? filtered.map(p => {
-        const stockLabel = p.stock === 0 ? `<span class="stock-badge danger">${t("inventory.outOfStock")}</span>` : p.stock <= lowStockThreshold ? `<span class="stock-badge warning">${t("dashboard.lowStockLabel")}</span>` : "";
-        return `<article class="product-card">
-          <div class="product-image-placeholder">${escapeHtml(p.name[0])}</div>
-          <strong>${escapeHtml(p.name)}</strong>
-          <span>${t("products.selling")}: ${money(p.selling)}</span>
-          <span>${t("products.stock")}: ${p.stock} ${stockLabel}</span>
-        </article>`;
-      }).join("")
+    ? filtered.map(productCardHtml).join("")
     : `<p class="empty-state">${t("products.noProducts")}</p>`;
+  observeProductImages(grid);
   const posContainer = document.querySelector("#posProducts");
   if (posContainer) {
     posContainer.innerHTML = filtered.length
       ? filtered.map(p => {
-          const idx = products.indexOf(p);
-          const qty = cart.get(idx) || 0;
+          const qty = cart.get(p.id) || 0;
           const atMax = qty >= p.stock;
-          return `<div class="pos-item ${qty > 0 ? "active" : ""}">
-            <div class="product-image-placeholder">${escapeHtml(p.name[0])}</div>
-            <strong>${escapeHtml(p.name)}</strong>
-            <span>${money(p.selling)}</span>
-            <div class="qty-controls">
-              <button type="button" class="ghost-button" data-dec="${idx}">-</button>
-              <span>${qty}</span>
-              <button type="button" class="ghost-button" data-inc="${idx}" ${atMax ? "disabled" : ""}>+</button>
+          return `<article class="pos-item ${qty > 0 ? "active" : ""}">
+            ${posItemThumbHtml(p)}
+            <div>
+              <strong>${escapeHtml(p.name)}</strong>
+              <small>${money(p.selling)}</small>
             </div>
-          </div>`;
+            <div class="qty-controls">
+              <button type="button" class="ghost-button" data-dec="${p.id}">-</button>
+              <span>${qty}</span>
+              <button type="button" class="ghost-button" data-inc="${p.id}" ${atMax ? "disabled" : ""}>+</button>
+            </div>
+          </article>`;
         }).join("")
       : `<p class="empty-state">${t("products.noProducts")}</p>`;
   }
@@ -1325,21 +1648,189 @@ document.querySelector("#productForm")?.addEventListener("submit", async event =
   }
 
   try {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("buying_price", document.querySelector("#productBuyingInput").value);
+    formData.append("selling_price", document.querySelector("#productSellingInput").value);
+    formData.append("minimum_allowed_selling_price", document.querySelector("#productMinPriceInput").value);
+    formData.append("stock_quantity", stockInput);
+    const imageInput = document.querySelector("#productImageInput");
+    if (imageInput && imageInput.files && imageInput.files[0]) {
+      formData.append("product_image", imageInput.files[0]);
+    }
+
     const result = await apiRequest("api/products.php", {
       method: "POST",
-      body: JSON.stringify({
-        name: name,
-        buying_price: document.querySelector("#productBuyingInput").value,
-        selling_price: document.querySelector("#productSellingInput").value,
-        minimum_allowed_selling_price: document.querySelector("#productMinPriceInput").value,
-        stock_quantity: stockInput
-      })
+      body: formData
     });
     form.reset();
+    clearProductImagePreview();
     showToast(result.updated ? t("products.updatedStock") || "Stock updated successfully." : t("products.added"));
+    if (result.image_error) {
+      showToast(result.image_error, "error");
+    }
     await refreshAppData();
   } catch (error) {
     showToast(error.message, "error");
+  }
+});
+
+function clearProductImagePreview() {
+  const input = document.querySelector("#productImageInput");
+  const wrap = document.querySelector("#productImagePreviewWrap");
+  const preview = document.querySelector("#productImagePreview");
+  if (input) input.value = "";
+  if (wrap) wrap.classList.add("hidden");
+  if (preview) preview.removeAttribute("src");
+}
+
+document.querySelector("#productImageInput")?.addEventListener("change", () => {
+  const input = document.querySelector("#productImageInput");
+  const wrap = document.querySelector("#productImagePreviewWrap");
+  const preview = document.querySelector("#productImagePreview");
+  const file = input.files && input.files[0];
+  if (!file) {
+    clearProductImagePreview();
+    return;
+  }
+  if (!["image/jpeg", "image/png"].includes(file.type)) {
+    showToast(t("products.imageUnsupported"), "error");
+    clearProductImagePreview();
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showToast(t("products.imageTooLarge"), "error");
+    clearProductImagePreview();
+    return;
+  }
+  if (preview && wrap) {
+    preview.src = URL.createObjectURL(file);
+    wrap.classList.remove("hidden");
+  }
+});
+
+document.querySelector("#productImageClear")?.addEventListener("click", clearProductImagePreview);
+
+let editingProductId = null;
+
+function openEditProductModal(product) {
+  editingProductId = Number(product.id);
+  document.querySelector("#editNameInput").value = product.name || "";
+  document.querySelector("#editBuyingInput").value = product.buying ?? "";
+  document.querySelector("#editSellingInput").value = product.selling ?? "";
+  document.querySelector("#editMinPriceInput").value = product.min_price ?? "";
+  document.querySelector("#editStockInput").value = product.stock ?? "";
+  const errorEl = document.querySelector("#editFormError");
+  if (errorEl) errorEl.style.display = "none";
+
+  const img = document.querySelector("#editCurrentImage");
+  const placeholder = document.querySelector("#editImagePlaceholder");
+  const imageUrl = productImageUrl(product);
+  if (img) {
+    if (imageUrl) {
+      img.src = imageUrl;
+      img.classList.remove("hidden");
+      if (placeholder) placeholder.classList.add("hidden");
+    } else {
+      img.classList.add("hidden");
+      img.removeAttribute("src");
+      if (placeholder) placeholder.classList.remove("hidden");
+    }
+  }
+
+  const fileInput = document.querySelector("#editImageInput");
+  const removeCheck = document.querySelector("#editRemoveImage");
+  if (fileInput) fileInput.value = "";
+  if (removeCheck) removeCheck.checked = false;
+
+  document.querySelector("#editProductModal")?.classList.remove("hidden");
+}
+
+function closeEditProductModal() {
+  document.querySelector("#editProductModal")?.classList.add("hidden");
+  editingProductId = null;
+}
+
+document.querySelector("#editProductCancelBtn")?.addEventListener("click", closeEditProductModal);
+document.querySelector("#editProductModal")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeEditProductModal();
+});
+
+document.querySelector("#editImageInput")?.addEventListener("change", () => {
+  const fileInput = document.querySelector("#editImageInput");
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  if (!["image/jpeg", "image/png"].includes(file.type)) {
+    showToast(t("products.imageUnsupported"), "error");
+    fileInput.value = "";
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showToast(t("products.imageTooLarge"), "error");
+    fileInput.value = "";
+    return;
+  }
+  const img = document.querySelector("#editCurrentImage");
+  if (img) {
+    img.src = URL.createObjectURL(file);
+    img.classList.remove("hidden");
+    const placeholder = document.querySelector("#editImagePlaceholder");
+    if (placeholder) placeholder.classList.add("hidden");
+  }
+  const removeCheck = document.querySelector("#editRemoveImage");
+  if (removeCheck) removeCheck.checked = false;
+});
+
+document.querySelector("#editProductSave")?.addEventListener("click", async () => {
+  if (!editingProductId) return;
+  const btn = document.querySelector("#editProductSave");
+  const originalLabel = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = t("common.processing");
+  }
+
+  try {
+    await apiRequest("api/products.php", {
+      method: "PUT",
+      body: JSON.stringify({
+        id: editingProductId,
+        name: document.querySelector("#editNameInput").value.trim(),
+        buying_price: document.querySelector("#editBuyingInput").value,
+        selling_price: document.querySelector("#editSellingInput").value,
+        minimum_allowed_selling_price: document.querySelector("#editMinPriceInput").value,
+        stock_quantity: document.querySelector("#editStockInput").value
+      })
+    });
+
+    const fileInput = document.querySelector("#editImageInput");
+    const removeCheck = document.querySelector("#editRemoveImage");
+    const hasNewFile = fileInput && fileInput.files && fileInput.files[0];
+
+    if (hasNewFile) {
+      const fd = new FormData();
+      fd.append("product_id", editingProductId);
+      fd.append("product_image", fileInput.files[0]);
+      await apiRequest("api/product_image.php", { method: "POST", body: fd });
+      showToast(t("products.imageUpdated"));
+    } else if (removeCheck && removeCheck.checked) {
+      await apiRequest("api/product_image.php", {
+        method: "POST",
+        body: JSON.stringify({ product_id: editingProductId, remove_image: true })
+      });
+      showToast(t("products.imageRemoved"));
+    }
+
+    showToast(t("products.updated"));
+    closeEditProductModal();
+    await refreshAppData();
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   }
 });
 
@@ -1347,34 +1838,7 @@ document.querySelector("#productGrid")?.addEventListener("click", async event =>
   const editId = event.target.dataset.editProduct;
   if (editId) {
     const product = products.find(item => String(item.id) === String(editId));
-    if (!product) return;
-    const name = prompt(t("products.namePlaceholder"), product.name);
-    if (name === null) return;
-    const buying = prompt(t("products.buying"), product.buying ?? "0");
-    if (buying === null) return;
-    const selling = prompt(t("products.selling"), product.selling);
-    if (selling === null) return;
-    const minPrice = prompt("Min allowed selling price", product.min_price ?? buying);
-    if (minPrice === null) return;
-    const stock = prompt(t("products.stock"), product.stock);
-    if (stock === null) return;
-    try {
-      await apiRequest("api/products.php", {
-        method: "PUT",
-        body: JSON.stringify({
-          id: product.id,
-          name,
-          buying_price: buying,
-          selling_price: selling,
-          minimum_allowed_selling_price: minPrice,
-          stock_quantity: stock
-        })
-      });
-      showToast(t("products.updated"));
-      await refreshAppData();
-    } catch (error) {
-      showToast(error.message, "error");
-    }
+    if (product) openEditProductModal(product);
   }
 
   const deleteId = event.target.dataset.deleteProduct;
@@ -1396,24 +1860,29 @@ document.querySelector("#posProducts")?.addEventListener("click", event => {
   const inc = event.target.dataset.inc;
   const dec = event.target.dataset.dec;
   if (inc !== undefined) {
-    const index = Number(inc);
-    const nextQty = (cart.get(index) || 0) + 1;
-    if (nextQty <= products[index].stock) cart.set(index, nextQty);
+    const id = Number(inc);
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    const nextQty = (cart.get(id) || 0) + 1;
+    if (nextQty <= product.stock) cart.set(id, nextQty);
   }
   if (dec !== undefined) {
-    const index = Number(dec);
-    cart.set(index, Math.max((cart.get(index) || 0) - 1, 0));
+    const id = Number(dec);
+    const nextQty = Math.max((cart.get(id) || 0) - 1, 0);
+    if (nextQty === 0) cart.delete(id);
+    else cart.set(id, nextQty);
   }
+  saveCartState();
   renderCart();
 });
 
 document.querySelector("#cartList")?.addEventListener("click", event => {
   const discount = event.target.dataset.discount;
   if (discount !== undefined) {
-    const index = Number(discount);
-    const product = products[index];
+    const id = Number(discount);
+    const product = products.find(p => p.id === id);
     if (!product) return;
-    const currentFp = getFinalPrice(index);
+    const currentFp = getFinalPrice(id);
     const input = prompt(`Enter final selling price for ${product.name} (Min: ${money(product.min_price)}, Max: ${money(product.selling)})`, currentFp);
     if (input === null) return;
     const fp = Number(input);
@@ -1430,11 +1899,211 @@ document.querySelector("#cartList")?.addEventListener("click", event => {
       return;
     }
     if (fp === product.selling) {
-      discountPrices.delete(index);
+      discountPrices.delete(id);
     } else {
-      discountPrices.set(index, fp);
+      discountPrices.set(id, fp);
     }
+    saveCartState();
     renderCart();
+  }
+});
+
+document.querySelector("#bulkDiscountToggle")?.addEventListener("change", event => {
+  bulkDiscountEnabled = event.target.checked;
+  if (bulkDiscountEnabled) {
+    const v = parseFloat(document.querySelector("#bulkDiscountPercent")?.value);
+    if (!isNaN(v) && v > 0 && v <= MAX_BULK_PERCENT) bulkDiscountPercent = v;
+  }
+  renderCart();
+});
+
+document.querySelector("#bulkDiscountPercent")?.addEventListener("input", event => {
+  const v = parseFloat(event.target.value);
+  if (!isNaN(v) && v > 0 && v <= MAX_BULK_PERCENT) {
+    bulkDiscountPercent = v;
+  } else {
+    event.target.value = bulkDiscountPercent;
+  }
+  renderCart();
+});
+
+// ── Owner promotions management ──────────────────────────────────────────────
+let editingPromotionId = null;
+
+async function loadPromotionsOwner() {
+  const payload = await apiRequest("api/promotions.php");
+  ownerPromotions = payload.promotions || [];
+  renderPromotionsList();
+}
+
+function promoEffectiveLabel(state) {
+  const keys = {
+    active: "promotions.stateActive",
+    scheduled: "promotions.stateScheduled",
+    expired: "promotions.stateExpired",
+    draft: "promotions.stateDraft",
+    inactive: "promotions.stateInactive"
+  };
+  return t(keys[state] || state);
+}
+
+function promoScopeText(promo) {
+  if (Number(promo.all_products) === 1) return t("promotions.allProducts");
+  const names = promo.product_names || [];
+  if (!names.length) return "—";
+  if (names.length <= 3) return names.join(", ");
+  return names.slice(0, 3).join(", ") + ` +${names.length - 3}`;
+}
+
+function renderPromotionsList() {
+  const listEl = document.querySelector("#promotionsList");
+  if (!listEl) return;
+  if (!ownerPromotions.length) {
+    listEl.innerHTML = `<p class="empty-state">${t("promotions.empty")}</p>`;
+    return;
+  }
+  listEl.innerHTML = ownerPromotions.map(promo => {
+    const state = promo.effective_state || "draft";
+    const statusBtn = state === "active"
+      ? `<button type="button" class="ghost-button" data-promo-deactivate="${promo.id}">${t("promotions.deactivate")}</button>`
+      : `<button type="button" class="gold-button" data-promo-activate="${promo.id}" ${state === "expired" ? "disabled" : ""}>${t("promotions.activate")}</button>`;
+    const actions = `${statusBtn}
+      <button type="button" class="ghost-button" data-promo-edit="${promo.id}" ${state === "active" ? "disabled" : ""}>${t("common.edit")}</button>
+      <button type="button" class="ghost-button danger" data-promo-delete="${promo.id}">${t("common.delete")}</button>`;
+    const dateRange = `${promo.start_date}${promo.start_time ? " " + promo.start_time : ""} → ${promo.end_date}${promo.end_time ? " " + promo.end_time : ""}`;
+    return `<article class="promo-card">
+      <div class="promo-card-head">
+        <strong>${escapeHtml(promo.name)}</strong>
+        <span class="promo-state ${state}">${promoEffectiveLabel(state)}</span>
+      </div>
+      ${promo.description ? `<p class="promo-desc">${escapeHtml(promo.description)}</p>` : ""}
+      <div class="promo-meta">
+        <span><i class="bi bi-tag-fill"></i> ${promo.percentage}%</span>
+        <span><i class="bi bi-calendar-range"></i> ${escapeHtml(dateRange)}</span>
+        <span><i class="bi bi-box-seam"></i> ${escapeHtml(promoScopeText(promo))}</span>
+      </div>
+      <div class="promo-actions">${actions}</div>
+    </article>`;
+  }).join("");
+}
+
+function openPromotionModal(promo) {
+  editingPromotionId = promo ? Number(promo.id) : null;
+  document.querySelector("#promoNameInput").value = promo ? promo.name : "";
+  document.querySelector("#promoDescriptionInput").value = promo ? (promo.description || "") : "";
+  document.querySelector("#promoPercentageInput").value = promo ? promo.percentage : "";
+  document.querySelector("#promoStartDate").value = promo ? promo.start_date : new Date().toISOString().slice(0, 10);
+  document.querySelector("#promoStartTime").value = promo ? (promo.start_time || "") : "";
+  document.querySelector("#promoEndDate").value = promo ? promo.end_date : "";
+  document.querySelector("#promoEndTime").value = promo ? (promo.end_time || "") : "";
+  const allProducts = promo ? Number(promo.all_products) === 1 : false;
+  document.querySelector("#promoAllProducts").checked = allProducts;
+  document.querySelector("#promoProductsField").classList.toggle("hidden", allProducts);
+  document.querySelector("#promotionModalTitle").textContent = promo ? t("promotions.edit") : t("promotions.addNew");
+  loadPromotionProductOptions(promo ? (promo.product_ids || []) : []);
+  document.querySelector("#promotionModal").classList.remove("hidden");
+}
+
+async function loadPromotionProductOptions(selectedIds) {
+  const picker = document.querySelector("#promoProductPicker");
+  if (!picker) return;
+  picker.innerHTML = `<p class="bulk-hint">${t("common.loading")}</p>`;
+  try {
+    const payload = await apiRequest("api/products.php");
+    const opts = payload.products || [];
+    picker.innerHTML = opts.map(p => {
+      const checked = selectedIds.includes(Number(p.id)) ? "checked" : "";
+      return `<label class="promo-product-option"><input type="checkbox" value="${p.id}" ${checked}/> ${escapeHtml(p.name)}</label>`;
+    }).join("") || `<p class="bulk-hint">${t("products.noProducts")}</p>`;
+  } catch (e) {
+    picker.innerHTML = `<p class="bulk-hint">${t("promotions.productLoadError")}</p>`;
+  }
+}
+
+function closePromotionModal() {
+  document.querySelector("#promotionModal")?.classList.add("hidden");
+  editingPromotionId = null;
+}
+
+async function savePromotion() {
+  const name = document.querySelector("#promoNameInput").value.trim();
+  const percentage = parseFloat(document.querySelector("#promoPercentageInput").value);
+  const startDate = document.querySelector("#promoStartDate").value;
+  const endDate = document.querySelector("#promoEndDate").value;
+  if (!name) { showToast(t("promotions.nameRequired"), "error"); return; }
+  if (isNaN(percentage) || percentage <= 0 || percentage > 100) { showToast(t("promotions.percentageInvalid"), "error"); return; }
+  if (!startDate || !endDate) { showToast(t("promotions.datesRequired"), "error"); return; }
+  if (endDate < startDate) { showToast(t("promotions.dateOrder"), "error"); return; }
+  const allProducts = document.querySelector("#promoAllProducts").checked;
+  const productIds = allProducts
+    ? []
+    : [...document.querySelectorAll("#promoProductPicker input[type=checkbox]:checked")].map(cb => Number(cb.value));
+  if (!allProducts && productIds.length === 0) { showToast(t("promotions.productsRequired"), "error"); return; }
+  const body = {
+    name,
+    description: document.querySelector("#promoDescriptionInput").value.trim(),
+    percentage,
+    start_date: startDate,
+    start_time: document.querySelector("#promoStartTime").value || "",
+    end_date: endDate,
+    end_time: document.querySelector("#promoEndTime").value || "",
+    all_products: allProducts,
+    product_ids: productIds
+  };
+  try {
+    if (editingPromotionId) {
+      await apiRequest("api/promotions.php", { method: "PUT", body: JSON.stringify({ id: editingPromotionId, ...body }) });
+      showToast(t("promotions.updated"));
+    } else {
+      await apiRequest("api/promotions.php", { method: "POST", body: JSON.stringify(body) });
+      showToast(t("promotions.created"));
+    }
+    closePromotionModal();
+    await loadPromotionsOwner();
+    await loadPromotions();
+  } catch (e) {
+    showToast(e.message, "error");
+  }
+}
+
+document.querySelector("#newPromotionButton")?.addEventListener("click", () => openPromotionModal(null));
+document.querySelector("#promotionCancelBtn")?.addEventListener("click", closePromotionModal);
+document.querySelector("#promotionSaveBtn")?.addEventListener("click", savePromotion);
+document.querySelector("#promotionModal")?.addEventListener("click", event => {
+  if (event.target.id === "promotionModal") closePromotionModal();
+});
+document.querySelector("#promoAllProducts")?.addEventListener("change", event => {
+  const field = document.querySelector("#promoProductsField");
+  if (field) field.classList.toggle("hidden", event.target.checked);
+});
+document.querySelector("#promotionsList")?.addEventListener("click", async event => {
+  const activateId = event.target.dataset.promoActivate;
+  const deactivateId = event.target.dataset.promoDeactivate;
+  const editId = event.target.dataset.promoEdit;
+  const deleteId = event.target.dataset.promoDelete;
+  try {
+    if (activateId !== undefined) {
+      await apiRequest("api/promotions.php", { method: "PUT", body: JSON.stringify({ id: activateId, action: "set_status", status: "active" }) });
+      showToast(t("promotions.activated"));
+      await loadPromotionsOwner();
+      await loadPromotions();
+    } else if (deactivateId !== undefined) {
+      await apiRequest("api/promotions.php", { method: "PUT", body: JSON.stringify({ id: deactivateId, action: "set_status", status: "inactive" }) });
+      showToast(t("promotions.deactivated"));
+      await loadPromotionsOwner();
+      await loadPromotions();
+    } else if (editId !== undefined) {
+      const promo = ownerPromotions.find(p => Number(p.id) === Number(editId));
+      if (promo) openPromotionModal(promo);
+    } else if (deleteId !== undefined) {
+      if (!confirm(t("promotions.confirmDelete"))) return;
+      await apiRequest("api/promotions.php", { method: "DELETE", body: JSON.stringify({ id: deleteId }) });
+      showToast(t("promotions.deleted"));
+      await loadPromotionsOwner();
+      await loadPromotions();
+    }
+  } catch (e) {
+    showToast(e.message, "error");
   }
 });
 
@@ -1447,13 +2116,20 @@ document.querySelector("#receiptButton")?.addEventListener("click", () => {
   }
   let total = 0;
   let items = [];
-  [...cart.entries()].filter(([, qty]) => qty > 0).forEach(([index, qty]) => {
-    const p = products[index];
-    const fp = getFinalPrice(index);
+  [...cart.entries()].filter(([, qty]) => qty > 0).forEach(([id, qty]) => {
+    const p = products.find(prod => prod.id === id);
+    if (!p) return;
+    const fp = getFinalPrice(id);
+    const pType = getPricingType(id);
     const lineTotal = fp * qty;
     total += lineTotal;
-    if (discountPrices.has(index)) {
-      items.push(`${p.name} x${qty}  ${money(p.selling)} → ${money(fp)} (discount)`);
+    if (pType === "promotion") {
+      const promo = getPromoForProduct(id);
+      items.push(`${p.name} x${qty}  ${money(p.selling)} → ${money(fp)} (${t("promotions.title")} -${promo ? promo.percentage : ""}%)`);
+    } else if (pType === "bulk_discount") {
+      items.push(`${p.name} x${qty}  ${money(p.selling)} → ${money(fp)} (${t("sales.bulkLabel")} -${bulkDiscountPercent}%)`);
+    } else if (pType === "existing_discount") {
+      items.push(`${p.name} x${qty}  ${money(p.selling)} → ${money(fp)} (${t("sales.discountLabel")})`);
     } else {
       items.push(`${p.name} x${qty}  ${money(fp * qty)}`);
     }
@@ -1497,7 +2173,20 @@ document.querySelector("#saveExpenseButton")?.addEventListener("click", async ()
     return;
   }
 
+  if (expenseDate > new Date().toISOString().slice(0, 10)) {
+    if (errorEl) { errorEl.textContent = t("expenses.futureDate"); errorEl.style.display = "block"; }
+    return;
+  }
+
+  const btn = document.querySelector("#saveExpenseButton");
+  const originalLabel = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = t("common.processing");
+  }
+
   try {
+    if (!expenseRequestKey) expenseRequestKey = generateRequestKey();
     await apiRequest("api/expenses.php", {
       method: "POST",
       body: JSON.stringify({
@@ -1505,9 +2194,11 @@ document.querySelector("#saveExpenseButton")?.addEventListener("click", async ()
         expense_name: expenseName,
         description,
         amount,
-        expense_date: expenseDate
+        expense_date: expenseDate,
+        request_id: expenseRequestKey
       })
     });
+    expenseRequestKey = null;
     document.querySelector("#expenseCategorySelect").value = "Food";
     document.querySelector("#expenseCustomName").value = "";
     document.querySelector("#expenseCustomName").classList.add("hidden");
@@ -1521,6 +2212,11 @@ document.querySelector("#saveExpenseButton")?.addEventListener("click", async ()
   } catch (error) {
     if (errorEl) { errorEl.textContent = error.message; errorEl.style.display = "block"; }
     showToast(error.message, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   }
 });
 
@@ -1669,7 +2365,7 @@ async function loadMaintenanceStatus() {
   try {
     const payload = await apiRequest("api/maintenance.php");
     const toggle = document.querySelector("#maintenanceModeToggle");
-    const msgInput = document.querySelector("#maintenanceMessage");
+    const msgInput = document.querySelector("#maintenanceMessageInput");
     if (toggle && payload.maintenance) {
       toggle.checked = payload.maintenance.active === true;
       if (msgInput && payload.maintenance.message) {
@@ -1683,7 +2379,7 @@ async function loadMaintenanceStatus() {
 
 document.querySelector("#saveMaintenanceButton")?.addEventListener("click", async () => {
   const toggle = document.querySelector("#maintenanceModeToggle");
-  const msgInput = document.querySelector("#maintenanceMessage");
+  const msgInput = document.querySelector("#maintenanceMessageInput");
   if (!toggle) return;
   try {
     const payload = await apiRequest("api/maintenance.php", {
@@ -1699,130 +2395,188 @@ document.querySelector("#saveMaintenanceButton")?.addEventListener("click", asyn
   }
 });
 
-let reportStartDate = "";
-let reportEndDate = "";
-let reportFormat = "json";
+// ── Report Generation Wizard ────────────────────────────────────────────
+const REPORT_CATEGORIES = {
+  OWNER: ["sales", "revenue", "expenses", "profit", "purchases", "inventory", "stock_movement", "seller_performance", "customers", "transactions", "products"],
+  SELLER: ["sales", "revenue", "expenses", "transactions"],
+};
+const REPORT_CATEGORY_LABEL = {
+  sales: "wizard.category.sales",
+  revenue: "wizard.category.revenue",
+  expenses: "wizard.category.expenses",
+  profit: "wizard.category.profit",
+  purchases: "wizard.category.purchases",
+  inventory: "wizard.category.inventory",
+  stock_movement: "wizard.category.stockMovement",
+  seller_performance: "wizard.category.sellerPerformance",
+  customers: "wizard.category.customers",
+  transactions: "wizard.category.transactions",
+  products: "wizard.category.products",
+};
 
-function showReportDateDialog(format) {
-  reportFormat = format;
-  const today = new Date();
-  document.querySelector("#reportStartDate").value = today.toISOString().slice(0, 10);
-  document.querySelector("#reportEndDate").value = today.toISOString().slice(0, 10);
-  document.querySelector("#reportDateModal").classList.remove("hidden");
-  document.querySelector("#customDateFields").classList.add("hidden");
+function showReportWizard() {
+  const modal = document.querySelector("#reportWizardModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  const period = document.querySelector("#wizardPeriod");
+  if (period) period.value = "today";
+  const customDates = document.querySelector("#wizardCustomDates");
+  if (customDates) customDates.classList.add("hidden");
+  const start = document.querySelector("#wizardStartDate");
+  const end = document.querySelector("#wizardEndDate");
+  if (start) start.value = "";
+  if (end) end.value = "";
+  const hint = document.querySelector("#wizardPeriodHint");
+  if (hint) hint.textContent = "";
+  const general = document.querySelector('input[name="wizardType"][value="general"]');
+  if (general) general.checked = true;
+  const cats = document.querySelector("#wizardCategories");
+  if (cats) cats.classList.add("hidden");
+  const pdf = document.querySelector('input[name="wizardFormat"][value="pdf"]');
+  if (pdf) pdf.checked = true;
+  renderWizardCategories();
+  goToWizardStep(1);
+  refreshWizardSelections();
 }
 
-function closeReportDateDialog() {
-  document.querySelector("#reportDateModal").classList.add("hidden");
+function closeReportWizard() {
+  document.querySelector("#reportWizardModal")?.classList.add("hidden");
 }
 
-function setReportDateRange(range) {
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = today.getMonth();
-  const d = today.getDate();
-  let start, end;
-  switch (range) {
-    case "today":
-      start = end = today;
-      break;
-    case "week": {
-      const dayOfWeek = today.getDay();
-      start = new Date(y, m, d - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-      end = today;
-      break;
-    }
-    case "2weeks":
-      start = new Date(y, m, d - 13);
-      end = today;
-      break;
-    case "month":
-      start = new Date(y, m, 1);
-      end = today;
-      break;
-    case "custom":
-      document.querySelector("#customDateFields").classList.remove("hidden");
-      return;
-    default:
-      return;
+function goToWizardStep(step) {
+  [1, 2, 3].forEach(n => {
+    document.querySelector(`#wizardStep${n}`)?.classList.toggle("hidden", n !== step);
+  });
+  document.querySelectorAll(".wizard-step").forEach(el => {
+    el.classList.toggle("active", Number(el.dataset.step) === step);
+  });
+}
+
+function renderWizardCategories() {
+  const box = document.querySelector("#wizardCategories");
+  if (!box) return;
+  const role = isOwner() ? "OWNER" : "SELLER";
+  const cats = REPORT_CATEGORIES[role] || [];
+  box.innerHTML = cats.map(c => `
+    <label class="wizard-cat"><input type="checkbox" value="${c}" /> ${escapeHtml(t(REPORT_CATEGORY_LABEL[c] || c))}</label>
+  `).join("");
+  refreshWizardSelections();
+}
+
+function refreshWizardSelections() {
+  document.querySelectorAll(".wizard-radio").forEach(label => {
+    label.classList.toggle("selected", !!label.querySelector("input:checked"));
+  });
+  document.querySelectorAll(".wizard-cat").forEach(label => {
+    label.classList.toggle("selected", !!label.querySelector("input:checked"));
+  });
+}
+
+function collectWizardOptions() {
+  const period = document.querySelector("#wizardPeriod")?.value || "today";
+  const options = { period };
+  if (period === "custom") {
+    options.start_date = document.querySelector("#wizardStartDate")?.value || "";
+    options.end_date = document.querySelector("#wizardEndDate")?.value || "";
   }
-  document.querySelector("#reportStartDate").value = start.toISOString().slice(0, 10);
-  document.querySelector("#reportEndDate").value = end.toISOString().slice(0, 10);
-  document.querySelector("#customDateFields").classList.add("hidden");
+  const type = document.querySelector('input[name="wizardType"]:checked')?.value || "general";
+  options.type = type;
+  if (type === "custom") {
+    options.categories = [...document.querySelectorAll("#wizardCategories input:checked")].map(cb => cb.value);
+  }
+  options.format = document.querySelector('input[name="wizardFormat"]:checked')?.value || "pdf";
+  return options;
 }
 
-document.querySelector("#reportDateModal")?.addEventListener("click", event => {
-  const rangeBtn = event.target.closest("[data-range]");
-  if (rangeBtn) setReportDateRange(rangeBtn.dataset.range);
-});
+function safeFilename(name) {
+  return String(name).replace(/[^A-Za-z0-9 _\-]/g, "").replace(/\s+/g, " ").trim() || "Report";
+}
 
-document.querySelector("#reportDateCancel")?.addEventListener("click", closeReportDateDialog);
-document.querySelector("#reportDateConfirm")?.addEventListener("click", () => {
-  reportStartDate = document.querySelector("#reportStartDate").value;
-  reportEndDate = document.querySelector("#reportEndDate").value;
-  closeReportDateDialog();
-  generateReport(reportFormat, reportStartDate, reportEndDate);
-});
-
-document.querySelector("#generateReportButton")?.addEventListener("click", () => showReportDateDialog("csv"));
-document.querySelector("#generateReportReportsButton")?.addEventListener("click", () => showReportDateDialog("json"));
-
-async function generateReport(format, startDate, endDate) {
-  if (format === "csv") {
-    const params = new URLSearchParams({ format: "csv" });
-    if (startDate) params.set("start_date", startDate);
-    if (endDate) params.set("end_date", endDate);
-    window.open("api/generate_report.php?" + params.toString(), "_blank");
+async function generateAndDownloadReport() {
+  const options = collectWizardOptions();
+  if (options.period === "custom" && (!options.start_date || !options.end_date)) {
+    showToast(t("wizard.customDatesRequired"), "error");
+    goToWizardStep(1);
     return;
   }
-  const params = new URLSearchParams({ format: "json" });
-  if (startDate) params.set("start_date", startDate);
-  if (endDate) params.set("end_date", endDate);
-  let payload;
+  if (options.type === "custom" && (!options.categories || options.categories.length === 0)) {
+    showToast(t("wizard.noCategories"), "error");
+    goToWizardStep(2);
+    return;
+  }
+  const btn = document.querySelector("#wizardGenerate");
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("btn-loading");
+  }
   try {
-    payload = await apiRequest("api/generate_report.php?" + params.toString());
+    const response = await fetch("api/generate_report.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken || "",
+      },
+      credentials: "same-origin",
+      cache: "no-store",
+      body: JSON.stringify(options),
+    });
+    if (!response.ok) {
+      let message = t("wizard.failed");
+      try {
+        const err = await response.json();
+        if (err?.message) message = err.message;
+      } catch (_) { /* ignore */ }
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const ext = options.format === "pdf" ? "pdf" : "xlsx";
+    const title = options.type === "general"
+      ? t("wizard.generalTitle")
+      : options.categories.map(c => t(REPORT_CATEGORY_LABEL[c] || c)).join(", ");
+    const filename = `MpeliOutFitStore Report - ${safeFilename(title)}.${ext}`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    closeReportWizard();
+    showToast(t("wizard.downloaded"));
   } catch (e) {
-    showToast(e.message, "error");
-    return;
+    showToast(e.message || t("wizard.failed"), "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("btn-loading");
+    }
   }
-  const report = payload.report;
-  const panel = document.querySelector("#reportOutputPanel");
-  const output = document.querySelector("#reportOutput");
-  const stamp = document.querySelector("#reportGeneratedAt");
-  const generator = document.querySelector("#reportGeneratedBy");
-  if (!panel || !output) return;
-  panel.classList.remove("hidden");
-  if (stamp) stamp.textContent = report.generated_at;
-  if (generator) generator.textContent = report.generated_by;
-  const periodLabel = report.period_start ? report.period_start + " to " + report.period_end : "All time";
-  output.innerHTML = `
-    <table class="report-table">
-      <caption>${t("reports.summarySection")} (${escapeHtml(periodLabel)})</caption>
-      <tr><td>${t("stats.totalProducts")}</td><td>${report.summary.total_products}</td></tr>
-      <tr><td>${t("stats.totalSales")}</td><td>${report.summary.total_sales}</td></tr>
-      <tr><td>${t("stats.dailyRevenue")}</td><td>${money(report.summary.period_revenue)}</td></tr>
-      <tr><td>${t("stats.dailyProfit")}</td><td>${money(report.summary.period_profit)}</td></tr>
-    </table>
-    <table class="report-table">
-      <caption>${t("reports.productsSection")}</caption>
-      <thead><tr><th>${t("products.namePlaceholder")}</th><th>${t("products.stock")}</th><th>${t("products.buying")}</th><th>${t("products.selling")}</th><th>${t("products.profit")}</th><th>${t("table.status")}</th></tr></thead>
-      <tbody>${report.products.map(p => `
-        <tr><td>${escapeHtml(p.product_name)}</td><td>${p.total_stock}</td><td>${money(p.buying_price)}</td><td>${money(p.selling_price)}</td><td>${money(p.profit_per_unit)}</td><td><span class="stock-badge ${p.stock_status === 'out_of_stock' ? 'danger' : p.stock_status === 'low_stock' ? 'warning' : ''}">${escapeHtml(p.stock_status)}</span></td></tr>
-      `).join("")}</tbody>
-    </table>
-    ${report.recent_sales.length ? `
-    <table class="report-table">
-      <caption>${t("reports.recentSalesSection")}</caption>
-      <thead><tr><th>${t("table.receipt")}</th><th>${t("table.amount")}</th><th>${t("table.profit")}</th><th>${t("common.today")}</th><th>${t("users.name")}</th></tr></thead>
-      <tbody>${report.recent_sales.map(s => `
-        <tr><td>${escapeHtml(s.receipt_number)}</td><td>${money(s.total_amount)}</td><td>${money(s.total_profit)}</td><td>${escapeHtml(s.sale_date)}</td><td>${escapeHtml(s.seller_name)}</td></tr>
-      `).join("")}</tbody>
-    </table>` : ""}
-  `;
-  document.querySelector("#reports")?.classList.add("active");
-  document.querySelector('[data-page="reports"]')?.classList.add("active");
-  showToast(t("reports.generatedReport"));
 }
+
+document.querySelector("#generateReportButton")?.addEventListener("click", showReportWizard);
+document.querySelector("#generateReportReportsButton")?.addEventListener("click", showReportWizard);
+document.querySelector("#wizardClose")?.addEventListener("click", closeReportWizard);
+document.querySelector("#wizardCancel")?.addEventListener("click", closeReportWizard);
+document.querySelector("#wizardPeriod")?.addEventListener("change", () => {
+  const isCustom = document.querySelector("#wizardPeriod")?.value === "custom";
+  document.querySelector("#wizardCustomDates")?.classList.toggle("hidden", !isCustom);
+  const hint = document.querySelector("#wizardPeriodHint");
+  if (hint) hint.textContent = isCustom ? t("wizard.customDatesHint") : "";
+});
+document.querySelector("#wizardNext1")?.addEventListener("click", () => goToWizardStep(2));
+document.querySelector("#wizardBack2")?.addEventListener("click", () => goToWizardStep(1));
+document.querySelectorAll('input[name="wizardType"]').forEach(input => {
+  input.addEventListener("change", () => {
+    const isCustom = document.querySelector('input[name="wizardType"]:checked')?.value === "custom";
+    document.querySelector("#wizardCategories")?.classList.toggle("hidden", !isCustom);
+    refreshWizardSelections();
+  });
+});
+document.querySelector("#wizardCategories")?.addEventListener("change", refreshWizardSelections);
+document.querySelector("#wizardNext2")?.addEventListener("click", () => goToWizardStep(3));
+document.querySelector("#wizardBack3")?.addEventListener("click", () => goToWizardStep(2));
+document.querySelector("#wizardGenerate")?.addEventListener("click", generateAndDownloadReport);
 
 // ── Live Clock + Date + Online Status + Dropdown ───────────
 let clockInterval = null;
@@ -1880,6 +2634,7 @@ function updateTopbarPageTitle(pageName) {
     expenses: "nav.expenses",
     reports: "nav.reports",
     inventory: "nav.inventory",
+    promotions: "nav.promotions",
     users: "nav.users",
     settings: "nav.settings"
   };
@@ -1897,6 +2652,8 @@ function setupUserDropdown() {
   const trigger = document.querySelector("#topbarUser");
   const dropdown = document.querySelector("#userDropdown");
   if (!trigger || !dropdown) return;
+  if (trigger.dataset.dropdownReady === "1") return;
+  trigger.dataset.dropdownReady = "1";
 
   function openDropdown() {
     dropdown.classList.remove("hidden");
@@ -1989,15 +2746,74 @@ document.querySelector("#dropdownProfile")?.addEventListener("click", () => {
   openProfileModal();
 });
 
-// ── Idle Timer: Auto-logout after 3 minutes ────────────────
-const IDLE_TIMEOUT = 3 * 60 * 1000;       // 3 minutes
-const WARNING_BEFORE = 60 * 1000;          // warn 60s before logout
+// ── Idle Session Timeout: warning modal + server-enforced logout ────────────
+const IDLE_TIMEOUT = 3 * 60 * 1000;          // 3 minutes idle before forced logout
+const WARNING_DURATION = 60 * 1000;          // 1 minute warning countdown
+const HEARTBEAT_DEBOUNCE = 30 * 1000;        // at most one server heartbeat per 30s of activity
+const ACTIVITY_BROADCAST_DEBOUNCE = 5 * 1000;// cross-tab activity broadcast per 5s
+
+const SESSION_ACTIVITY_KEY = "mpos.session.activity";
+const SESSION_LOGGED_OUT_KEY = "mpos.session.loggedOut";
+const IDLE_RING_RADIUS = 52;
+const IDLE_RING_CIRCUMFERENCE = 2 * Math.PI * IDLE_RING_RADIUS;
+
 let idleTimer = null;
 let warningTimer = null;
 let countdownInterval = null;
 let idleWarningShowing = false;
+let idleListenersAttached = false;
+let loggingOut = false;
+let countdownStartTime = 0;
+let lastHeartbeatSent = 0;
+let lastActivityBroadcast = 0;
+
+function idleStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    /* storage may be unavailable (private mode); ignore */
+  }
+}
+
+// Tell other open tabs the user is active (throttled).
+function broadcastActivity() {
+  const now = Date.now();
+  if (now - lastActivityBroadcast >= ACTIVITY_BROADCAST_DEBOUNCE) {
+    lastActivityBroadcast = now;
+    idleStorageSet(SESSION_ACTIVITY_KEY, String(now));
+  }
+}
+
+// Debounced server heartbeat so genuine activity keeps the server-side session
+// alive without spamming requests on every mouse move.
+function sendHeartbeat(force) {
+  if (!currentUser) return;
+  const now = Date.now();
+  if (!force && now - lastHeartbeatSent < HEARTBEAT_DEBOUNCE) return;
+  lastHeartbeatSent = now;
+  apiRequest("api/heartbeat.php")
+    .then(payload => {
+      if (payload.authenticated === false) {
+        forceLogout("idle_timeout");
+      }
+    })
+    .catch(() => {
+      // Transient network errors are ignored; the server-side timer still expires.
+    });
+}
+
+function updateIdleRing(remainingSeconds, totalSeconds) {
+  const ring = document.querySelector("#idleRingProgress");
+  const number = document.querySelector("#idleCountdown");
+  if (!ring || !number) return;
+  const fraction = Math.max(0, Math.min(1, remainingSeconds / totalSeconds));
+  ring.style.strokeDashoffset = String(IDLE_RING_CIRCUMFERENCE * (1 - fraction));
+  ring.classList.toggle("danger", remainingSeconds <= 15);
+  number.textContent = String(Math.max(0, Math.ceil(remainingSeconds)));
+}
 
 function resetIdleTimer() {
+  if (!currentUser) return;
   clearTimeout(idleTimer);
   clearTimeout(warningTimer);
   clearInterval(countdownInterval);
@@ -2005,9 +2821,12 @@ function resetIdleTimer() {
 
   document.querySelector("#idleWarningModal")?.classList.add("hidden");
 
+  broadcastActivity();
+  sendHeartbeat(false);
+
   idleTimer = setTimeout(() => {
     showIdleWarning();
-  }, IDLE_TIMEOUT - WARNING_BEFORE);
+  }, IDLE_TIMEOUT - WARNING_DURATION);
 }
 
 function showIdleWarning() {
@@ -2015,17 +2834,21 @@ function showIdleWarning() {
   idleWarningShowing = true;
 
   const modal = document.querySelector("#idleWarningModal");
-  const countdownEl = document.querySelector("#idleCountdown");
-  if (!modal || !countdownEl) return;
+  const stayBtn = document.querySelector("#idleStayBtn");
+  if (!modal || !stayBtn) return;
+
+  // Confirm the server still considers the session valid before starting the clock.
+  sendHeartbeat(true);
 
   modal.classList.remove("hidden");
-
-  let remaining = WARNING_BEFORE / 1000;
-  countdownEl.textContent = remaining;
+  countdownStartTime = Date.now();
+  const total = WARNING_DURATION / 1000;
+  updateIdleRing(total, total);
+  stayBtn.focus();
 
   countdownInterval = setInterval(() => {
-    remaining--;
-    countdownEl.textContent = remaining;
+    const remaining = total - Math.floor((Date.now() - countdownStartTime) / 1000);
+    updateIdleRing(remaining, total);
     if (remaining <= 0) {
       clearInterval(countdownInterval);
       forceLogout("idle_timeout");
@@ -2034,18 +2857,25 @@ function showIdleWarning() {
 }
 
 function forceLogout(reason) {
+  if (loggingOut) return;
+  loggingOut = true;
+
   clearInterval(countdownInterval);
   clearTimeout(idleTimer);
   clearTimeout(warningTimer);
+  idleWarningShowing = false;
 
   document.querySelector("#idleWarningModal")?.classList.add("hidden");
+
+  // Let other tabs know this session is over (multi-tab consistency).
+  idleStorageSet(SESSION_LOGGED_OUT_KEY, String(Date.now()));
 
   apiRequest("api/logout.php", { method: "POST" }).catch(() => {});
 
   currentUser = null;
   products = [];
-  cart.clear();
-  discountPrices.clear();
+  clearCartState();
+  forgetLastPage();
   clearCsrfToken();
   document.querySelector("#loginForm")?.reset();
   document.querySelector("#ownerSetupForm")?.reset();
@@ -2053,15 +2883,44 @@ function forceLogout(reason) {
   showLogin(true);
 
   showToast(reason === "idle_timeout"
-    ? (t("idle.loggedOut") || "Logged out due to inactivity.")
+    ? (t("idle.loggedOut") || "Your session expired due to inactivity. Please log in again.")
     : "Session expired.");
 }
 
 function startIdleTimer() {
+  loggingOut = false;
+
+  if (idleListenersAttached) {
+    resetIdleTimer();
+    return;
+  }
+  idleListenersAttached = true;
+
+  // Only genuine user interaction resets the idle timer. Background polling,
+  // chart refreshes and AJAX updates never fire these events.
   const activityEvents = ["mousedown", "keydown", "touchstart", "scroll", "mousemove"];
   activityEvents.forEach(event => {
     document.addEventListener(event, resetIdleTimer, { passive: true });
   });
+
+  // Multi-tab consistency: activity in any tab keeps every tab alive, and a
+  // logout in one tab logs out the others.
+  window.addEventListener("storage", (e) => {
+    if (!currentUser) return;
+    if (e.key === SESSION_ACTIVITY_KEY) {
+      resetIdleTimer();
+    } else if (e.key === SESSION_LOGGED_OUT_KEY) {
+      forceLogout("session_expired");
+    }
+  });
+
+  // Re-validate the server-side session whenever the tab regains focus.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && currentUser) {
+      sendHeartbeat(true);
+    }
+  });
+
   resetIdleTimer();
 }
 
@@ -2073,8 +2932,15 @@ function stopIdleTimer() {
   document.querySelector("#idleWarningModal")?.classList.add("hidden");
 }
 
+// Continue Session: cancel the countdown and reset the timer everywhere.
 document.querySelector("#idleStayBtn")?.addEventListener("click", () => {
+  sendHeartbeat(true);
   resetIdleTimer();
+});
+
+// Log Out: end the session immediately.
+document.querySelector("#idleLogoutBtn")?.addEventListener("click", () => {
+  forceLogout("logout");
 });
 
 let dashboardRefreshTimer = null;
@@ -2086,7 +2952,8 @@ function startDashboardAutoRefresh() {
   dashboardRefreshTimer = setInterval(async () => {
     if (document.querySelector("#dashboard")?.classList.contains("active")) {
       try {
-        await refreshFinancialData();
+        // Background poll: must not count as user activity or reset the idle timer.
+        await refreshFinancialData({ background: true });
       } catch (e) {
         console.warn("Auto-refresh failed:", e);
       }
@@ -2138,6 +3005,11 @@ async function init() {
       console.log("[init] User authenticated as:", currentUser.name, "(" + currentUser.role + ")");
       showApp();
       await refreshAppData();
+      const lastPage = getLastPage();
+      if (lastPage && lastPage !== "dashboard") {
+        const target = document.querySelector(`.nav-item[data-page="${lastPage}"]`);
+        if (target) target.click();
+      }
       startDashboardAutoRefresh();
     } else {
       const ownerExists = mePayload.owner_exists === true;

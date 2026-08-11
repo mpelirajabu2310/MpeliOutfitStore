@@ -3,93 +3,124 @@ declare(strict_types=1);
 
 require __DIR__ . '/db.php';
 
-$user = require_role($pdo, ['OWNER']);
+$user = require_login($pdo);
 
 require_once __DIR__ . '/../services/PermissionService.php';
+require_once __DIR__ . '/../services/ReportService.php';
+require_once __DIR__ . '/../services/ReportPeriodHelper.php';
+require_once __DIR__ . '/../services/PdfReportService.php';
+require_once __DIR__ . '/../services/ExcelReportService.php';
+
 PermissionService::requirePermission($user['role'], 'reports.generate');
 
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if (!in_array($method, ['GET', 'POST'], true)) {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
-
-$format = strtolower((string)($_GET['format'] ?? 'json'));
-if (!in_array($format, ['json', 'csv'], true)) {
-    respond(['success' => false, 'message' => 'Invalid format. Allowed: json, csv.'], 422);
+if ($method === 'POST') {
+    require_csrf();
 }
 
-$startDate = trim((string)($_GET['start_date'] ?? ''));
-$endDate = trim((string)($_GET['end_date'] ?? ''));
-if ($startDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) {
-    respond(['success' => false, 'message' => 'Invalid start_date format. Use YYYY-MM-DD.'], 422);
-}
-if ($endDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
-    respond(['success' => false, 'message' => 'Invalid end_date format. Use YYYY-MM-DD.'], 422);
-}
-if ($startDate !== '' && $endDate !== '' && $startDate > $endDate) {
-    respond(['success' => false, 'message' => 'start_date must not be after end_date.'], 422);
+// Merge query string, form fields and JSON body into a single input map.
+$input = array_merge($_GET, $_POST, read_json_body());
+
+$format = strtolower(trim((string)($input['format'] ?? '')));
+if (!in_array($format, ['pdf', 'xlsx'], true)) {
+    respond(['success' => false, 'message' => 'Invalid format. Allowed: pdf, xlsx.'], 422);
 }
 
-require_once __DIR__ . '/../services/ReportService.php';
-$reportService = new ReportService();
+$period = strtolower(trim((string)($input['period'] ?? '')));
+if (!ReportPeriodHelper::isValidPeriod($period)) {
+    respond(['success' => false, 'message' => 'Invalid period. Allowed: today, week, month, year, custom.'], 422);
+}
 
-$report = $reportService->generateFullReport(
-    $startDate !== '' ? $startDate : null,
-    $endDate !== '' ? $endDate : null,
-    $user['name']
+$startDate = trim((string)($input['start_date'] ?? ''));
+$endDate = trim((string)($input['end_date'] ?? ''));
+
+if ($period === 'custom') {
+    if ($startDate === '' || $endDate === '') {
+        respond(['success' => false, 'message' => 'Custom period requires start_date and end_date.'], 422);
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+        respond(['success' => false, 'message' => 'Invalid date format. Use YYYY-MM-DD.'], 422);
+    }
+    if ($startDate > $endDate) {
+        respond(['success' => false, 'message' => 'start_date must not be after end_date.'], 422);
+    }
+} elseif ($startDate !== '' || $endDate !== '') {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+        respond(['success' => false, 'message' => 'Invalid date format. Use YYYY-MM-DD.'], 422);
+    }
+    if ($startDate > $endDate) {
+        respond(['success' => false, 'message' => 'start_date must not be after end_date.'], 422);
+    }
+}
+
+$type = strtolower(trim((string)($input['type'] ?? 'general')));
+if (!in_array($type, ['general', 'custom'], true)) {
+    respond(['success' => false, 'message' => 'Invalid report type. Allowed: general, custom.'], 422);
+}
+
+$categories = [];
+if (isset($input['categories'])) {
+    $raw = $input['categories'];
+    $categories = is_array($raw) ? array_map('strval', $raw) : explode(',', (string)$raw);
+}
+$categories = array_values(array_filter(array_map('strtolower', array_map('trim', $categories)), fn ($c) => $c !== ''));
+
+$options = [
+    'period' => $period,
+    'start_date' => $startDate !== '' ? $startDate : null,
+    'end_date' => $endDate !== '' ? $endDate : null,
+    'type' => $type,
+    'categories' => $categories,
+];
+
+try {
+    $report = (new ReportService())->generateReport($options, $user);
+} catch (InvalidArgumentException $e) {
+    respond(['success' => false, 'message' => $e->getMessage()], 422);
+}
+
+// Wide tables read better in landscape orientation. Pick landscape when a
+// section needs six or more columns, or when the columns' minimum widths
+// would exceed the A4 portrait printable width.
+$landscape = false;
+$portraitContentW = 515.0; // A4 portrait minus the 40pt page margins
+foreach (($report['sections'] ?? []) as $section) {
+    foreach ([$section['columns'] ?? [], ...($section['subsections'] ?? [])] as $cols) {
+        if (count($cols) >= 6 || PdfReportService::estimateMinWidth($cols) > $portraitContentW) {
+            $landscape = true;
+            break 2;
+        }
+    }
+}
+
+$safeTitle = preg_replace('/[^A-Za-z0-9 _\-]/', '', (string)($report['meta']['title'] ?? 'Report')) ?? '';
+$safeTitle = trim(preg_replace('/\s+/', ' ', $safeTitle) ?? '');
+$filename = 'MpeliOutFitStore Report - ' . ($safeTitle !== '' ? $safeTitle : 'Report') . '.' . $format;
+
+log_activity(
+    (int)$user['id'],
+    'report_generated',
+    "Format: {$format}, Period: {$period}, Type: {$type}, Categories: " . implode(', ', $report['meta']['categories'] ?? []) . ", Range: " . (($report['meta']['period_start'] ?? '') . ' - ' . ($report['meta']['period_end'] ?? ''))
 );
 
-log_activity((int)$user['id'], 'report_generated', "Format: {$format}, Period: {$startDate} to {$endDate}");
-
-if ($format === 'csv') {
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="shop-report-' . date('Y-m-d') . '.csv"');
-
-    $sanitizeCsv = function (string $val): string {
-        if (in_array($val[0] ?? '', ['=', '+', '-', '@', "\t", "\r"], true)) {
-            $val = "'" . $val;
-        }
-        return $val;
-    };
-
-    $out = fopen('php://output', 'w');
-    fputcsv($out, [$sanitizeCsv('Clothing Shop Report'), $report['generated_at']]);
-    fputcsv($out, ['Generated by', $report['generated_by']]);
-    fputcsv($out, []);
-    fputcsv($out, ['Period', $report['period_start'] ?: 'All time', $report['period_end'] ?: '']);
-    fputcsv($out, ['Summary']);
-    fputcsv($out, ['Total products', $report['summary']['total_products']]);
-    fputcsv($out, ['Total sales', $report['summary']['total_sales']]);
-    fputcsv($out, ['Period revenue (TSH)', $report['summary']['period_revenue']]);
-    fputcsv($out, ['Period profit (TSH)', $report['summary']['period_profit']]);
-    fputcsv($out, ['Period expenses (TSH)', $report['summary']['period_expenses']]);
-    fputcsv($out, ['Period net profit (TSH)', $report['summary']['period_net_profit']]);
-    fputcsv($out, []);
-    fputcsv($out, ['Products']);
-    fputcsv($out, ['Name', 'Stock', 'Buying', 'Selling', 'Profit/unit', 'Status']);
-    foreach ($report['products'] as $product) {
-        fputcsv($out, [
-            $sanitizeCsv($product['product_name']),
-            $product['total_stock'],
-            $product['buying_price'],
-            $product['selling_price'],
-            $product['profit_per_unit'],
-            $product['stock_status'],
-        ]);
-    }
-    fputcsv($out, []);
-    fputcsv($out, ['Sales']);
-    fputcsv($out, ['Receipt', 'Amount', 'Profit', 'Date', 'Seller']);
-    foreach ($report['recent_sales'] as $sale) {
-        fputcsv($out, [
-            $sale['receipt_number'],
-            $sale['total_amount'],
-            $sale['total_profit'],
-            $sale['sale_date'],
-            $sanitizeCsv($sale['seller_name']),
-        ]);
-    }
-    fclose($out);
-    exit;
+if ($format === 'pdf') {
+    $binary = (new PdfReportService())->render($report, $landscape);
+    $contentType = 'application/pdf';
+} else {
+    $binary = (new ExcelReportService())->render($report);
+    $contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 }
 
-respond(['success' => true, 'report' => $report]);
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+
+header('Content-Type: ' . $contentType . '; charset=utf-8');
+header('Content-Disposition: attachment; filename="' . $filename . '"');
+header('Content-Length: ' . strlen($binary));
+header('Cache-Control: no-cache, no-store, must-revalidate');
+echo $binary;
+exit;

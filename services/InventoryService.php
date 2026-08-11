@@ -35,7 +35,7 @@ class InventoryService extends BaseService
     public function getVariantWithProduct(int $variantId): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT pv.id AS variant_id, pv.stock_quantity, p.buying_price, p.selling_price, p.minimum_allowed_selling_price
+            'SELECT pv.id AS variant_id, p.id AS product_id, pv.stock_quantity, p.buying_price, p.selling_price, p.minimum_allowed_selling_price
              FROM product_variants pv
              JOIN products p ON p.id = pv.product_id
              WHERE pv.id = :variant_id AND p.status = "active"
@@ -152,6 +152,71 @@ class InventoryService extends BaseService
     public function getTotalActiveProducts(): int
     {
         return (int)$this->db->query('SELECT COUNT(*) FROM products WHERE status = "active"')->fetchColumn();
+    }
+
+    /**
+     * Full stock catalog rows for reports (mirrors the product_stock_summary view).
+     */
+    public function getStockReportData(): array
+    {
+        return $this->db->query(
+            'SELECT product_name, category_name, total_stock, reorder_level,
+                    buying_price, selling_price, profit_per_unit, stock_status
+             FROM product_stock_summary ORDER BY product_name ASC'
+        )->fetchAll();
+    }
+
+    /**
+     * Inventory movements within an inclusive date range (null = all time).
+     */
+    public function getInventoryMovements(?string $startDate = null, ?string $endDate = null, int $limit = 500): array
+    {
+        $sql = 'SELECT im.movement_type, im.quantity_change, im.reference_type, im.note,
+                       im.created_at, p.product_name, sz.label AS size_label, cl.name AS color_label, u.name AS created_by_name
+                FROM inventory_movements im
+                JOIN product_variants pv ON pv.id = im.variant_id
+                JOIN products p ON p.id = pv.product_id
+                LEFT JOIN sizes sz ON sz.id = pv.size_id
+                LEFT JOIN colors cl ON cl.id = pv.color_id
+                LEFT JOIN users u ON u.id = im.created_by';
+        $params = [];
+        if ($startDate !== null && $endDate !== null) {
+            $sql .= ' WHERE im.created_at >= :start_date AND im.created_at < :end_date';
+            $params = [
+                'start_date' => $startDate . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
+            ];
+        }
+        $sql .= ' ORDER BY im.created_at DESC LIMIT ' . max(1, min(2000, $limit));
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    /**
+     * Purchase-type movements within an inclusive date range (null = all time).
+     */
+    public function getPurchaseMovements(?string $startDate = null, ?string $endDate = null, int $limit = 500): array
+    {
+        $sql = "SELECT im.movement_type, im.quantity_change, im.reference_type, im.note,
+                       im.created_at, p.product_name, u.name AS created_by_name
+                FROM inventory_movements im
+                JOIN product_variants pv ON pv.id = im.variant_id
+                JOIN products p ON p.id = pv.product_id
+                LEFT JOIN users u ON u.id = im.created_by
+                WHERE im.movement_type IN ('stock_in', 'return', 'adjustment')";
+        $params = [];
+        if ($startDate !== null && $endDate !== null) {
+            $sql .= ' AND im.created_at >= :start_date AND im.created_at < :end_date';
+            $params = [
+                'start_date' => $startDate . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
+            ];
+        }
+        $sql .= ' ORDER BY im.created_at DESC LIMIT ' . max(1, min(2000, $limit));
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
     }
 
     private function getGlobalThreshold(): int

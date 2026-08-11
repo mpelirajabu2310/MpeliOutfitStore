@@ -53,8 +53,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
         respond(['success' => false, 'message' => 'Invalid expense_date format. Use YYYY-MM-DD.'], 422);
     }
+    if ($expenseDate > date('Y-m-d')) {
+        respond(['success' => false, 'message' => 'Expense date cannot be in the future.'], 422);
+    }
     if (strlen($expenseName) > 255) {
         respond(['success' => false, 'message' => 'Expense name must be 255 characters or fewer.'], 422);
+    }
+    $requestId = (string)($data['request_id'] ?? '');
+    if ($requestId !== '' && (strlen($requestId) > 64 || !preg_match('/^[A-Za-z0-9._:-]+$/', $requestId))) {
+        respond(['success' => false, 'message' => 'Invalid request_id.'], 422);
     }
 
     $expenseService->addExpense(
@@ -63,7 +70,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $expenseDate,
         $category === 'Other' ? $expenseName : null,
         $description ?: null,
-        $user['id']
+        $user['id'],
+        $requestId ?: null
     );
 
     log_activity((int)$user['id'], 'expense_created', "Category: {$category}, Amount: {$amount}, Date: {$expenseDate}");
@@ -103,6 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     }
     if ($expenseDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
         respond(['success' => false, 'message' => 'Invalid expense_date format. Use YYYY-MM-DD.'], 422);
+    }
+    if ($expenseDate !== '' && $expenseDate > date('Y-m-d')) {
+        respond(['success' => false, 'message' => 'Expense date cannot be in the future.'], 422);
     }
     if (strlen($expenseName) > 255) {
         respond(['success' => false, 'message' => 'Expense name must be 255 characters or fewer.'], 422);

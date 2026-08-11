@@ -22,9 +22,19 @@ class ProfitService extends BaseService
         return $this->sumProfit('YEAR(sale_date) = YEAR(CURDATE())', $userId);
     }
 
-    public function calculateGrossProfit(?string $startDate = null, ?string $endDate = null): float
+    public function calculateWeeklyProfit(?int $userId = null): float
     {
-        return $this->sumProfitWithDateRange($startDate, $endDate);
+        return $this->sumProfit('sale_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)', $userId);
+    }
+
+    public function calculateTotalProfit(?int $userId = null): float
+    {
+        return $this->sumProfit('1 = 1', $userId);
+    }
+
+    public function calculateGrossProfit(?string $startDate = null, ?string $endDate = null, ?int $userId = null): float
+    {
+        return $this->sumProfitWithDateRange($startDate, $endDate, $userId);
     }
 
     // ── Buying Cost ──
@@ -44,7 +54,17 @@ class ProfitService extends BaseService
         return $this->sumBuyingCost('YEAR(s.sale_date) = YEAR(CURDATE())', $userId);
     }
 
-    public function calculatePeriodBuyingCost(?string $startDate = null, ?string $endDate = null): float
+    public function calculateWeeklyBuyingCost(?int $userId = null): float
+    {
+        return $this->sumBuyingCost('s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)', $userId);
+    }
+
+    public function calculateTotalBuyingCost(?int $userId = null): float
+    {
+        return $this->sumBuyingCost('1 = 1', $userId);
+    }
+
+    public function calculatePeriodBuyingCost(?string $startDate = null, ?string $endDate = null, ?int $userId = null): float
     {
         $where = '';
         $params = [];
@@ -54,6 +74,10 @@ class ProfitService extends BaseService
                 'start_date' => $startDate . ' 00:00:00',
                 'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
+        }
+        if ($userId !== null) {
+            $where .= ' AND s.sold_by = :user_id';
+            $params['user_id'] = $userId;
         }
         $stmt = $this->db->prepare(
             "SELECT COALESCE(SUM(si.quantity * si.buying_price), 0)
@@ -80,6 +104,16 @@ class ProfitService extends BaseService
     public function calculateYearlyRevenue(?int $userId = null): float
     {
         return $this->sumRevenue('YEAR(sale_date) = YEAR(CURDATE())', $userId);
+    }
+
+    public function calculateWeeklyRevenue(?int $userId = null): float
+    {
+        return $this->sumRevenue('sale_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)', $userId);
+    }
+
+    public function calculateTotalRevenue(?int $userId = null): float
+    {
+        return $this->sumRevenue('1 = 1', $userId);
     }
 
     public function calculatePeriodRevenue(?string $startDate = null, ?string $endDate = null): float
@@ -114,22 +148,46 @@ class ProfitService extends BaseService
         return $this->sumExpenses('YEAR(expense_date) = YEAR(CURDATE())', $userId);
     }
 
-    public function calculateTotalExpenses(?string $startDate = null, ?string $endDate = null): float
+    public function calculateWeeklyExpenses(?int $userId = null): float
     {
-        if ($startDate !== null && $endDate !== null) {
-            $stmt = $this->db->prepare(
-                "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date >= :start_date AND expense_date < :end_date"
-            );
-            $stmt->execute([
-                'start_date' => $startDate . ' 00:00:00',
-                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
-            ]);
-            return (float)$stmt->fetchColumn();
-        }
-        return (float)$this->db->query('SELECT COALESCE(SUM(amount), 0) FROM expenses')->fetchColumn();
+        return $this->sumExpenses('expense_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)', $userId);
     }
 
-    public function getExpenseCategoryBreakdown(?string $startDate = null, ?string $endDate = null): array
+    public function calculateAllTimeExpenses(?int $userId = null): float
+    {
+        return $this->sumExpenses('1 = 1', $userId);
+    }
+
+    public function calculatePeriodExpenses(?string $startDate = null, ?string $endDate = null, ?int $userId = null): float
+    {
+        $where = '';
+        $params = [];
+        if ($startDate !== null && $endDate !== null) {
+            $where = ' expense_date >= :start_date AND expense_date < :end_date';
+            $params = [
+                'start_date' => $startDate . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
+            ];
+        }
+        if ($userId !== null) {
+            $where .= ($where !== '' ? ' AND ' : '') . ' created_by = :user_id';
+            $params['user_id'] = $userId;
+        }
+        $sql = 'SELECT COALESCE(SUM(amount), 0) FROM expenses';
+        if ($where !== '') {
+            $sql .= ' WHERE ' . $where;
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return (float)$stmt->fetchColumn();
+    }
+
+    public function calculateTotalExpenses(?string $startDate = null, ?string $endDate = null, ?int $userId = null): float
+    {
+        return $this->calculatePeriodExpenses($startDate, $endDate, $userId);
+    }
+
+    public function getExpenseCategoryBreakdown(?string $startDate = null, ?string $endDate = null, ?int $userId = null): array
     {
         $where = '';
         $params = [];
@@ -139,6 +197,10 @@ class ProfitService extends BaseService
                 'start_date' => $startDate . ' 00:00:00',
                 'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
+        }
+        if ($userId !== null) {
+            $where .= ($where !== '' ? ' AND ' : ' WHERE ') . ' created_by = :user_id';
+            $params['user_id'] = $userId;
         }
         $stmt = $this->db->prepare(
             "SELECT category, COALESCE(SUM(amount), 0) AS total
@@ -166,9 +228,19 @@ class ProfitService extends BaseService
         return $this->calculateYearlyProfit($userId) - $this->calculateYearlyExpenses($userId);
     }
 
-    public function calculatePeriodNetProfit(?string $startDate, ?string $endDate): float
+    public function calculateWeeklyNetProfit(?int $userId = null): float
     {
-        return $this->calculateGrossProfit($startDate, $endDate) - $this->calculateTotalExpenses($startDate, $endDate);
+        return $this->calculateWeeklyProfit($userId) - $this->calculateWeeklyExpenses($userId);
+    }
+
+    public function calculateTotalNetProfit(?int $userId = null): float
+    {
+        return $this->calculateTotalProfit($userId) - $this->calculateAllTimeExpenses($userId);
+    }
+
+    public function calculatePeriodNetProfit(?string $startDate, ?string $endDate, ?int $userId = null): float
+    {
+        return $this->calculateGrossProfit($startDate, $endDate, $userId) - $this->calculatePeriodExpenses($startDate, $endDate, $userId);
     }
 
     public function calculateBuyingCost(?int $userId = null): float
@@ -233,18 +305,25 @@ class ProfitService extends BaseService
         return (float)$stmt->fetchColumn();
     }
 
-    private function sumProfitWithDateRange(?string $startDate, ?string $endDate): float
+    private function sumProfitWithDateRange(?string $startDate, ?string $endDate, ?int $userId = null): float
     {
+        $where = '';
+        $params = [];
         if ($startDate !== null && $endDate !== null) {
-            $stmt = $this->db->prepare(
-                "SELECT COALESCE(SUM(total_profit), 0) FROM sales WHERE payment_status = 'paid' AND sale_date >= :start_date AND sale_date < :end_date"
-            );
-            $stmt->execute([
+            $where = ' AND sale_date >= :start_date AND sale_date < :end_date';
+            $params = [
                 'start_date' => $startDate . ' 00:00:00',
                 'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
-            ]);
-            return (float)$stmt->fetchColumn();
+            ];
         }
-        return (float)$this->db->query("SELECT COALESCE(SUM(total_profit), 0) FROM sales WHERE payment_status = 'paid'")->fetchColumn();
+        if ($userId !== null) {
+            $where .= ' AND sold_by = :user_id';
+            $params['user_id'] = $userId;
+        }
+        $stmt = $this->db->prepare(
+            "SELECT COALESCE(SUM(total_profit), 0) FROM sales WHERE payment_status = 'paid'{$where}"
+        );
+        $stmt->execute($params);
+        return (float)$stmt->fetchColumn();
     }
 }

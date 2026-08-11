@@ -12,21 +12,61 @@ class ExpenseService extends BaseService
         return $this->CATEGORIES;
     }
 
-    public function addExpense(string $category, float $amount, string $expenseDate, ?string $expenseName = null, ?string $description = null, int $userId = 0): int
+    public function addExpense(string $category, float $amount, string $expenseDate, ?string $expenseName = null, ?string $description = null, int $userId = 0, ?string $requestId = null): int
     {
-        $stmt = $this->db->prepare(
-            'INSERT INTO expenses (category, expense_name, description, amount, expense_date, created_by)
-             VALUES (:category, :expense_name, :description, :amount, :expense_date, :created_by)'
-        );
-        $stmt->execute([
-            'category' => $category,
-            'expense_name' => $expenseName,
-            'description' => $description,
-            'amount' => $amount,
-            'expense_date' => $expenseDate,
-            'created_by' => $userId,
-        ]);
-        return (int)$this->db->lastInsertId();
+        $this->db->beginTransaction();
+        try {
+            if ($requestId !== null && $requestId !== '') {
+                $existingId = $this->findExpenseIdByRequestId($requestId);
+                if ($existingId > 0) {
+                    $this->db->commit();
+                    return $existingId;
+                }
+            }
+
+            $stmt = $this->db->prepare(
+                'INSERT INTO expenses (category, expense_name, description, amount, expense_date, created_by, idempotency_key)
+                 VALUES (:category, :expense_name, :description, :amount, :expense_date, :created_by, :idempotency_key)'
+            );
+            try {
+                $stmt->execute([
+                    'category' => $category,
+                    'expense_name' => $expenseName,
+                    'description' => $description,
+                    'amount' => $amount,
+                    'expense_date' => $expenseDate,
+                    'created_by' => $userId,
+                    'idempotency_key' => $requestId,
+                ]);
+            } catch (PDOException $e) {
+                if ($requestId !== null && $requestId !== '' && str_starts_with((string)$e->getCode(), '23')) {
+                    $this->db->rollBack();
+                    $this->db->beginTransaction();
+                    $existingId = $this->findExpenseIdByRequestId($requestId);
+                    if ($existingId > 0) {
+                        $this->db->commit();
+                        return $existingId;
+                    }
+                }
+                throw $e;
+            }
+
+            $newId = (int)$this->db->lastInsertId();
+            $this->db->commit();
+            return $newId;
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function findExpenseIdByRequestId(string $requestId): int
+    {
+        $stmt = $this->db->prepare('SELECT id FROM expenses WHERE idempotency_key = :key LIMIT 1');
+        $stmt->execute(['key' => $requestId]);
+        return (int)$stmt->fetchColumn();
     }
 
     public function updateExpense(int $id, array $data): void
@@ -115,6 +155,44 @@ class ExpenseService extends BaseService
         return $this->aggregate('YEAR(expense_date) = YEAR(CURDATE())', $userId);
     }
 
+    public function getWeeklyTotal(?int $userId = null): float
+    {
+        return $this->aggregate('expense_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)', $userId);
+    }
+
+    public function getTotalAllTime(?int $userId = null): float
+    {
+        return $this->aggregate('1 = 1', $userId);
+    }
+
+    /**
+     * Expense rows within an inclusive date range (null = all time).
+     */
+    public function getExpenseList(?int $userId = null, ?string $startDate = null, ?string $endDate = null, int $limit = 500): array
+    {
+        $sql = 'SELECT e.category, e.expense_name, e.description, e.amount, e.expense_date, u.name AS created_by_name
+                FROM expenses e
+                JOIN users u ON u.id = e.created_by';
+        $params = [];
+        $wheres = [];
+        if ($userId !== null) {
+            $wheres[] = 'e.created_by = :user_id';
+            $params['user_id'] = $userId;
+        }
+        if ($startDate !== null && $endDate !== null) {
+            $wheres[] = 'e.expense_date >= :start_date AND e.expense_date < :end_date';
+            $params['start_date'] = $startDate . ' 00:00:00';
+            $params['end_date'] = date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00';
+        }
+        if (count($wheres) > 0) {
+            $sql .= ' WHERE ' . implode(' AND ', $wheres);
+        }
+        $sql .= ' ORDER BY e.expense_date DESC, e.id DESC LIMIT ' . max(1, min(2000, $limit));
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
     public function getCategoryBreakdown(?int $userId = null): array
     {
         $sql = "SELECT category, COALESCE(SUM(amount), 0) AS total
@@ -130,7 +208,34 @@ class ExpenseService extends BaseService
         return $stmt->fetchAll();
     }
 
-    public function getCategoryBreakdownByDateRange(?string $startDate = null, ?string $endDate = null): array
+    /**
+     * Expense totals grouped by day (inclusive date range).
+     */
+    public function getDailyTotals(?int $userId = null, ?string $startDate = null, ?string $endDate = null): array
+    {
+        $sql = 'SELECT expense_date, COALESCE(SUM(amount), 0) AS total
+                FROM expenses';
+        $wheres = [];
+        $params = [];
+        if ($userId !== null) {
+            $wheres[] = 'created_by = :user_id';
+            $params['user_id'] = $userId;
+        }
+        if ($startDate !== null && $endDate !== null) {
+            $wheres[] = 'expense_date >= :start_date AND expense_date < :end_date';
+            $params['start_date'] = $startDate . ' 00:00:00';
+            $params['end_date'] = date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00';
+        }
+        if (count($wheres) > 0) {
+            $sql .= ' WHERE ' . implode(' AND ', $wheres);
+        }
+        $sql .= ' GROUP BY expense_date ORDER BY expense_date ASC';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function getCategoryBreakdownByDateRange(?string $startDate = null, ?string $endDate = null, ?int $userId = null): array
     {
         $where = '';
         $params = [];
@@ -141,6 +246,10 @@ class ExpenseService extends BaseService
                 'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
+        if ($userId !== null) {
+            $where .= ($where !== '' ? ' AND ' : ' WHERE ') . ' created_by = :user_id';
+            $params['user_id'] = $userId;
+        }
         $stmt = $this->db->prepare(
             "SELECT category, COALESCE(SUM(amount), 0) AS total
              FROM expenses{$where}
@@ -150,19 +259,26 @@ class ExpenseService extends BaseService
         return $stmt->fetchAll();
     }
 
-    public function getTotalExpenses(?string $startDate = null, ?string $endDate = null): float
+    public function getTotalExpenses(?string $startDate = null, ?string $endDate = null, ?int $userId = null): float
     {
+        $where = '';
+        $params = [];
         if ($startDate !== null && $endDate !== null) {
-            $stmt = $this->db->prepare(
-                "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date >= :start_date AND expense_date < :end_date"
-            );
-            $stmt->execute([
+            $where = ' WHERE expense_date >= :start_date AND expense_date < :end_date';
+            $params = [
                 'start_date' => $startDate . ' 00:00:00',
                 'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
-            ]);
-            return (float)$stmt->fetchColumn();
+            ];
         }
-        return (float)$this->db->query('SELECT COALESCE(SUM(amount), 0) FROM expenses')->fetchColumn();
+        if ($userId !== null) {
+            $where .= ($where !== '' ? ' AND ' : ' WHERE ') . ' created_by = :user_id';
+            $params['user_id'] = $userId;
+        }
+        $stmt = $this->db->prepare(
+            "SELECT COALESCE(SUM(amount), 0) FROM expenses{$where}"
+        );
+        $stmt->execute($params);
+        return (float)$stmt->fetchColumn();
     }
 
     private function aggregate(string $whereClause, ?int $userId = null): float

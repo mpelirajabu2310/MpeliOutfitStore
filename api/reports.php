@@ -25,5 +25,6 @@ $sellerId = $isOwner ? null : $user['id'];
 
 $stats = $reportService->getReportStats($sellerId, $isOwner);
 $stats['success'] = true;
+$stats['analytics'] = $reportService->getDashboardAnalytics($sellerId, $isOwner);
 $stats['permissions'] = PermissionService::getPermissions($user['role']);
 respond($stats);

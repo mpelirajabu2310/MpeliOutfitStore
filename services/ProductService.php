@@ -72,6 +72,20 @@ class ProductService extends BaseService
         $stmt->execute(['id' => $id, 'name' => $name, 'buying_price' => $buyingPrice, 'selling_price' => $sellingPrice, 'min_price' => $minPrice]);
     }
 
+    public function setProductImage(int $id, ?string $imagePath): void
+    {
+        $stmt = $this->db->prepare('UPDATE products SET image_path = :image_path WHERE id = :id');
+        $stmt->execute(['id' => $id, 'image_path' => $imagePath]);
+    }
+
+    public function getProductImage(int $id): ?string
+    {
+        $stmt = $this->db->prepare('SELECT image_path FROM products WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $path = $stmt->fetchColumn();
+        return ($path !== false && $path !== null && $path !== '') ? (string)$path : null;
+    }
+
     public function deleteProduct(int $id): void
     {
         $stmt = $this->db->prepare('UPDATE products SET status = "inactive" WHERE id = :id');
@@ -81,7 +95,7 @@ class ProductService extends BaseService
     public function getProductById(int $id): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT p.id, p.product_name, p.buying_price, p.selling_price, p.minimum_allowed_selling_price, p.status
+            'SELECT p.id, p.product_name, p.image_path, p.buying_price, p.selling_price, p.minimum_allowed_selling_price, p.status
              FROM products p WHERE p.id = :id AND p.status = "active" LIMIT 1'
         );
         $stmt->execute(['id' => $id]);
@@ -107,6 +121,8 @@ class ProductService extends BaseService
                   p.id,
                   MIN(pv.id) AS variant_id,
                   p.product_name AS name,
+                  p.image_path AS image_path,
+                  p.updated_at AS updated_at,
                   p.buying_price AS buying,
                   p.selling_price AS selling,
                   p.minimum_allowed_selling_price AS min_price,
@@ -122,7 +138,7 @@ class ProductService extends BaseService
             $params['search'] = "%{$search}%";
         }
 
-        $sql .= ' GROUP BY p.id, p.product_name, p.buying_price, p.selling_price, p.minimum_allowed_selling_price
+        $sql .= ' GROUP BY p.id, p.product_name, p.image_path, p.updated_at, p.buying_price, p.selling_price, p.minimum_allowed_selling_price
                   ORDER BY p.created_at DESC';
 
         $stmt = $this->db->prepare($sql);

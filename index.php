@@ -21,11 +21,17 @@ $timestamp = time();
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title data-i18n="app.title">mpeli Outfit Store | Clothing Shop Management</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16x16.png?v=<?php echo $timestamp; ?>" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon.png?v=<?php echo $timestamp; ?>" />
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/images/favicon-48x48.png?v=<?php echo $timestamp; ?>" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/images/favicon-192.png?v=<?php echo $timestamp; ?>" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/images/apple-touch-icon.png?v=<?php echo $timestamp; ?>" />
+  <meta name="theme-color" content="#12110f" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=<?php echo $timestamp; ?>&bust=4" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=<?php echo $timestamp; ?>&bust=9" />
 </head>
 <body>
   <div class="splash-screen" id="splashScreen">
@@ -120,17 +126,19 @@ $timestamp = time();
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <aside class="sidebar">
       <div class="sidebar-brand">
+        <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="sidebar-logo" />
         <span class="sidebar-title">Mpeli Outfit Store</span>
       </div>
       <nav class="side-nav" aria-label="Main navigation" data-i18n-aria-label="aria.mainNavigation">
-        <button class="nav-item active" data-page="dashboard" data-i18n="nav.dashboard"><i class="bi bi-grid-1x2-fill"></i> Dashboard</button>
-        <button class="nav-item" data-page="products" data-i18n="nav.products"><i class="bi bi-box-seam-fill"></i> Products</button>
-        <button class="nav-item" data-page="sales" data-i18n="nav.sales"><i class="bi bi-cart-check-fill"></i> Sales POS</button>
-        <button class="nav-item owner-only" data-page="inventory" data-i18n="nav.inventory"><i class="bi bi-clipboard-data-fill"></i> Inventory</button>
-        <button class="nav-item owner-only" data-page="reports" data-i18n="nav.reports"><i class="bi bi-bar-chart-line-fill"></i> Reports</button>
-        <button class="nav-item" data-page="expenses" data-i18n="nav.expenses"><i class="bi bi-wallet2"></i> Expenses</button>
-        <button class="nav-item owner-only" data-page="users" data-i18n="nav.users"><i class="bi bi-people-fill"></i> Users</button>
-        <button class="nav-item owner-only" data-page="settings" data-i18n="nav.settings"><i class="bi bi-gear-fill"></i> Settings</button>
+        <button class="nav-item active" data-page="dashboard"><i class="bi bi-grid-1x2-fill"></i> <span data-i18n="nav.dashboard">Dashboard</span></button>
+        <button class="nav-item" data-page="products"><i class="bi bi-box-seam-fill"></i> <span data-i18n="nav.products">Products</span></button>
+        <button class="nav-item owner-only" data-page="promotions"><i class="bi bi-tags-fill"></i> <span data-i18n="nav.promotions">Promotions</span></button>
+        <button class="nav-item" data-page="sales"><i class="bi bi-cart-check-fill"></i> <span data-i18n="nav.sales">Sales POS</span></button>
+        <button class="nav-item owner-only" data-page="inventory"><i class="bi bi-clipboard-data-fill"></i> <span data-i18n="nav.inventory">Inventory</span></button>
+        <button class="nav-item" data-page="reports"><i class="bi bi-bar-chart-line-fill"></i> <span data-i18n="nav.reports">Reports</span></button>
+        <button class="nav-item" data-page="expenses"><i class="bi bi-wallet2"></i> <span data-i18n="nav.expenses">Expenses</span></button>
+        <button class="nav-item owner-only" data-page="users"><i class="bi bi-people-fill"></i> <span data-i18n="nav.users">Users</span></button>
+        <button class="nav-item owner-only" data-page="settings"><i class="bi bi-gear-fill"></i> <span data-i18n="nav.settings">Settings</span></button>
       </nav>
       <div class="sidebar-feature owner-only">
         <span data-i18n="sidebar.drop">Operations</span>
@@ -193,7 +201,7 @@ $timestamp = time();
             <p class="eyebrow" data-i18n="dashboard.eyebrow">Operations Overview</p>
             <h2 data-i18n="nav.dashboard">Dashboard</h2>
           </div>
-          <button class="gold-button owner-only" id="generateReportButton" data-i18n="reports.generateReport">Generate Report</button>
+          <button class="gold-button" id="generateReportButton" data-i18n="reports.generateReport">Generate Report</button>
         </div>
         <section class="stats-grid">
           <article class="stat-card"><span data-i18n="stats.totalProducts">Total Products</span><strong id="totalProducts">0</strong><small data-i18n="stats.activeCatalog">Active catalog items</small></article>
@@ -207,6 +215,39 @@ $timestamp = time();
           <article class="stat-card owner-only"><span data-i18n="stats.monthlyExpenses">Monthly Expenses</span><strong id="monthlyExpenses">TSH 0</strong><small data-i18n="stats.expensesMonth">Expenses this month</small></article>
           <article class="stat-card owner-only"><span data-i18n="stats.monthlyNetProfit">Monthly Net Profit</span><strong id="monthlyNetProfit">TSH 0</strong><small data-i18n="stats.netProfitMonth">Net profit this month</small></article>
           <article class="stat-card warning"><span data-i18n="stats.lowStockItems">Low Stock Items</span><strong id="lowStockItems">0</strong><small data-i18n="stats.restockReview">Needs restock review</small></article>
+        </section>
+        <section class="seller-only" id="sellerAnalytics">
+          <div class="section-title"><h3 data-i18n="analytics.myPerformance">My Performance</h3><span data-i18n="analytics.ownScope">Sales and expenses recorded by you</span></div>
+          <div class="analytics-grid">
+            <article class="panel analytics-card">
+              <h4 data-i18n="analytics.week">This Week</h4>
+              <div class="financial-lines">
+                <div class="fin-row"><span data-i18n="analytics.sales">Sales</span><strong id="analWeekSales">TSH 0</strong></div>
+                <div class="fin-row fin-divider"><span data-i18n="analytics.expenses">Expenses</span><strong id="analWeekExpenses">TSH 0</strong></div>
+              </div>
+            </article>
+            <article class="panel analytics-card">
+              <h4 data-i18n="analytics.month">This Month</h4>
+              <div class="financial-lines">
+                <div class="fin-row"><span data-i18n="analytics.sales">Sales</span><strong id="analMonthSales">TSH 0</strong></div>
+                <div class="fin-row fin-divider"><span data-i18n="analytics.expenses">Expenses</span><strong id="analMonthExpenses">TSH 0</strong></div>
+              </div>
+            </article>
+            <article class="panel analytics-card">
+              <h4 data-i18n="analytics.year">This Year</h4>
+              <div class="financial-lines">
+                <div class="fin-row"><span data-i18n="analytics.sales">Sales</span><strong id="analYearSales">TSH 0</strong></div>
+                <div class="fin-row fin-divider"><span data-i18n="analytics.expenses">Expenses</span><strong id="analYearExpenses">TSH 0</strong></div>
+              </div>
+            </article>
+            <article class="panel analytics-card">
+              <h4 data-i18n="analytics.allTime">All Time</h4>
+              <div class="financial-lines">
+                <div class="fin-row"><span data-i18n="analytics.sales">Sales</span><strong id="analTotalSales">TSH 0</strong></div>
+                <div class="fin-row fin-divider"><span data-i18n="analytics.expenses">Expenses</span><strong id="analTotalExpenses">TSH 0</strong></div>
+              </div>
+            </article>
+          </div>
         </section>
         <section class="dashboard-grid">
           <article class="panel chart-panel">
@@ -223,6 +264,22 @@ $timestamp = time();
               <h3 data-i18n="dashboard.storeFloor">Overview</h3>
             </div>
             <p id="dashboardSummaryText" data-i18n="dashboard.storeFloorEmpty">Add products and record sales to see live performance here.</p>
+          </article>
+          <article class="panel owner-only chart-panel">
+            <div class="panel-title">
+              <h3 data-i18n="dashboard.profitTrend">Profit Trend</h3>
+            </div>
+            <div class="bar-chart profit-chart">
+              <p class="empty-state" data-i18n="dashboard.noChartData">No sales data available yet.</p>
+            </div>
+          </article>
+          <article class="panel chart-panel">
+            <div class="panel-title">
+              <h3 data-i18n="dashboard.stockLevels">Stock Levels</h3>
+            </div>
+            <div class="bar-chart stock-chart">
+              <p class="empty-state" data-i18n="dashboard.noChartData">No sales data available yet.</p>
+            </div>
           </article>
         </section>
         <article class="panel stock-alerts-panel hidden" id="stockAlertsPanel">
@@ -255,12 +312,31 @@ $timestamp = time();
           <input id="productSellingInput" type="number" min="0" step="1" placeholder="Selling price (TSH)" data-i18n-placeholder="products.selling" required />
           <input id="productMinPriceInput" type="number" min="0" step="1" placeholder="Min allowed selling price (TSH)" title="Minimum Allowed Selling Price" required />
           <input id="productStockInput" type="number" min="0" step="1" placeholder="Stock quantity" data-i18n-placeholder="products.stock" />
+          <div class="product-image-field">
+            <div class="image-input-row">
+              <input id="productImageInput" type="file" accept="image/jpeg,image/png,image/jpg" data-i18n-aria-label="products.imageLabel" aria-label="Product image" />
+              <button type="button" class="ghost-button" id="productImageClear" data-i18n="products.imageClear">Clear</button>
+            </div>
+            <div id="productImagePreviewWrap" class="image-preview hidden">
+              <img id="productImagePreview" alt="Product image preview" />
+            </div>
+          </div>
           <button class="gold-button" type="submit" data-i18n="products.saveProduct"><i class="bi bi-check-circle-fill"></i> Save product</button>
         </form>
         <div class="toolbar">
           <input type="search" id="productSearch" placeholder="Search products..." data-i18n-placeholder="products.searchPlaceholder" />
         </div>
         <section class="product-grid" id="productGrid"></section>
+      </main>
+      <main class="page owner-only" id="promotions">
+        <div class="page-heading">
+          <div><p class="eyebrow" data-i18n="promotions.eyebrow">Discount Campaigns</p><h2 data-i18n="promotions.title">Promotions Management</h2></div>
+          <button class="gold-button" id="newPromotionButton" data-i18n="promotions.addNew"><i class="bi bi-plus-circle-fill"></i> New promotion</button>
+        </div>
+        <div class="toolbar">
+          <p class="bulk-hint promotions-hint" data-i18n="promotions.helpText">Promotions are percentage discounts with a start/end window. Activate one to make it live for sellers.</p>
+        </div>
+        <section class="promotions-list" id="promotionsList"></section>
       </main>
       <main class="page" id="sales">
         <div class="page-heading">
@@ -277,6 +353,17 @@ $timestamp = time();
             <div id="cartList" class="cart-list"></div>
             <div class="receipt-row"><span data-i18n="sales.total">Total</span><strong id="saleTotal">TSH 0</strong></div>
             <div class="receipt-row owner-only"><span data-i18n="table.profit">Profit</span><strong id="saleProfit">TSH 0</strong></div>
+            <div class="bulk-discount-wrap" id="bulkDiscountWrap">
+              <label class="toggle-line">
+                <input type="checkbox" id="bulkDiscountToggle" disabled />
+                <span data-i18n="sales.bulkDiscount">Bulk customer discount (3+ items)</span>
+              </label>
+              <div class="bulk-controls">
+                <span data-i18n="sales.bulkPercent">Discount %</span>
+                <input type="number" id="bulkDiscountPercent" min="1" max="20" step="1" value="15" />
+              </div>
+              <p class="bulk-hint" id="bulkDiscountHint" data-i18n="sales.bulkNeedsItems">Add 3 or more items to enable bulk discount.</p>
+            </div>
             <label><span data-i18n="sales.paymentMethod">Payment method</span>
               <select id="paymentMethod"><option value="cash" data-i18n="payment.cash">Cash</option><option value="card" data-i18n="payment.card">Card</option><option value="mobile_money" data-i18n="payment.mobileMoney">Mobile Money</option></select>
             </label>
@@ -299,7 +386,7 @@ $timestamp = time();
           <article class="panel stock-out"><h3 data-i18n="inventory.outStockSection">Out of stock</h3><ul id="outStockList" class="inventory-items"><li data-i18n="inventory.noOutStock">No out of stock items.</li></ul></article>
         </section>
       </main>
-      <main class="page owner-only" id="reports">
+      <main class="page" id="reports">
         <div class="page-heading">
           <div><p class="eyebrow" data-i18n="reports.eyebrow">Performance Intelligence</p><h2 data-i18n="reports.title">Reports and Analytics</h2></div>
           <button class="gold-button" id="generateReportReportsButton" data-i18n="reports.generateReport"><i class="bi bi-file-earmark-bar-graph"></i> Generate Report</button>
@@ -350,11 +437,6 @@ $timestamp = time();
         <article class="panel">
           <h3 data-i18n="reports.bestSelling">Best Selling Products</h3>
           <div class="best-sellers" id="bestSellers"><span data-i18n="dashboard.noChartData">No sales data available yet.</span></div>
-        </article>
-        <article class="panel hidden" id="reportOutputPanel">
-          <div class="panel-title"><h3 data-i18n="reports.generatedReport">Generated Report</h3><small id="reportGeneratedAt"></small><small id="reportGeneratedBy"></small></div>
-          <div class="report-output table-wrap" id="reportOutput"></div>
-          <div class="settings-actions"><button class="ghost-button" onclick="downloadPdfReport()" data-i18n="reports.downloadPdf">Download PDF</button></div>
         </article>
       </main>
       <main class="page owner-only" id="users">
@@ -473,8 +555,8 @@ $timestamp = time();
             <h3 data-i18n="settings.maintenance">System Maintenance</h3>
             <label class="toggle-line"><span data-i18n="settings.maintenanceMode">Maintenance Mode</span> <input type="checkbox" id="maintenanceModeToggle" /></label>
             <p class="form-hint" data-i18n="settings.maintenanceHint">When enabled, only owners can log in. All other users will see a maintenance screen.</p>
-            <label for="maintenanceMessage" data-i18n="settings.maintenanceMessage">Maintenance message</label>
-            <input type="text" id="maintenanceMessage" value="System is under maintenance. Please try again later." data-i18n-placeholder="settings.maintenanceMessage" />
+            <label for="maintenanceMessageInput" data-i18n="settings.maintenanceMessage">Maintenance message</label>
+            <input type="text" id="maintenanceMessageInput" value="System is under maintenance. Please try again later." data-i18n-placeholder="settings.maintenanceMessage" />
             <button class="gold-button" type="button" id="saveMaintenanceButton" data-i18n="settings.saveMaintenance"><i class="bi bi-tools"></i> Save maintenance settings</button>
           </article>
         </section>
@@ -486,23 +568,62 @@ $timestamp = time();
     </section>
   </div>
 
-  <div class="modal-overlay hidden" id="reportDateModal">
-    <div class="modal-dialog">
-      <h3>Report Date Range</h3>
-      <div class="modal-quick-buttons">
-        <button type="button" class="ghost-button" data-range="today">Today</button>
-        <button type="button" class="ghost-button" data-range="week">This Week</button>
-        <button type="button" class="ghost-button" data-range="2weeks">Two Weeks</button>
-        <button type="button" class="ghost-button" data-range="month">This Month</button>
-        <button type="button" class="ghost-button" data-range="custom">Custom</button>
+  <div class="modal-overlay hidden" id="reportWizardModal">
+    <div class="modal-dialog wizard-dialog">
+      <div class="modal-head">
+        <h3 data-i18n="wizard.title">Generate Report</h3>
+        <button type="button" class="reset-close" id="wizardClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
       </div>
-      <div class="modal-date-fields hidden" id="customDateFields">
-        <label>Start: <input type="date" id="reportStartDate" /></label>
-        <label>End: <input type="date" id="reportEndDate" /></label>
+
+      <div class="wizard-steps">
+        <span class="wizard-step active" data-step="1"><i class="bi bi-calendar3"></i> <span data-i18n="wizard.stepPeriod">Period</span></span>
+        <span class="wizard-step" data-step="2"><i class="bi bi-list-check"></i> <span data-i18n="wizard.stepContent">Content</span></span>
+        <span class="wizard-step" data-step="3"><i class="bi bi-file-earmark-arrow-down"></i> <span data-i18n="wizard.stepFormat">Format</span></span>
       </div>
-      <div class="modal-actions">
-        <button type="button" class="ghost-button" id="reportDateCancel">Cancel</button>
-        <button type="button" class="gold-button" id="reportDateConfirm"><i class="bi bi-check-lg"></i> Generate</button>
+
+      <div class="wizard-panel" id="wizardStep1">
+        <label class="wizard-field"><span data-i18n="wizard.selectPeriod">Select period</span>
+          <select id="wizardPeriod">
+            <option value="today" data-i18n="wizard.today">Today</option>
+            <option value="week" data-i18n="wizard.week">This Week (rolling 7 days)</option>
+            <option value="month" data-i18n="wizard.month">This Month</option>
+            <option value="year" data-i18n="wizard.year">This Year</option>
+            <option value="custom" data-i18n="wizard.custom">Custom Range</option>
+          </select>
+        </label>
+        <div class="wizard-date-row hidden" id="wizardCustomDates">
+          <label class="wizard-field"><span data-i18n="wizard.startDate">Start date</span><input type="date" id="wizardStartDate" /></label>
+          <label class="wizard-field"><span data-i18n="wizard.endDate">End date</span><input type="date" id="wizardEndDate" /></label>
+        </div>
+        <p class="form-hint" id="wizardPeriodHint"></p>
+        <div class="modal-actions">
+          <button type="button" class="ghost-button" id="wizardCancel" data-i18n="common.cancel">Cancel</button>
+          <button type="button" class="gold-button" id="wizardNext1"><i class="bi bi-arrow-right"></i> <span data-i18n="wizard.next">Next</span></button>
+        </div>
+      </div>
+
+      <div class="wizard-panel hidden" id="wizardStep2">
+        <div class="wizard-type-row">
+          <label class="wizard-radio"><input type="radio" name="wizardType" value="general" checked /> <span data-i18n="wizard.general">General (all sections)</span></label>
+          <label class="wizard-radio"><input type="radio" name="wizardType" value="custom" /> <span data-i18n="wizard.customSections">Choose sections</span></label>
+        </div>
+        <div class="wizard-categories hidden" id="wizardCategories"></div>
+        <div class="modal-actions">
+          <button type="button" class="ghost-button" id="wizardBack2"><i class="bi bi-arrow-left"></i> <span data-i18n="wizard.back">Back</span></button>
+          <button type="button" class="gold-button" id="wizardNext2"><i class="bi bi-arrow-right"></i> <span data-i18n="wizard.next">Next</span></button>
+        </div>
+      </div>
+
+      <div class="wizard-panel hidden" id="wizardStep3">
+        <div class="wizard-format-row">
+          <label class="wizard-radio"><input type="radio" name="wizardFormat" value="pdf" checked /> <i class="bi bi-filetype-pdf"></i> <span data-i18n="wizard.pdf">PDF (A4 report)</span></label>
+          <label class="wizard-radio"><input type="radio" name="wizardFormat" value="xlsx" /> <i class="bi bi-file-earmark-excel"></i> <span data-i18n="wizard.xlsx">Excel (XLSX)</span></label>
+        </div>
+        <p class="form-hint" id="wizardGenerateHint"></p>
+        <div class="modal-actions">
+          <button type="button" class="ghost-button" id="wizardBack3"><i class="bi bi-arrow-left"></i> <span data-i18n="wizard.back">Back</span></button>
+          <button type="button" class="gold-button" id="wizardGenerate"><i class="bi bi-download"></i> <span data-i18n="wizard.generateDownload">Generate &amp; Download</span></button>
+        </div>
       </div>
     </div>
   </div>
@@ -609,20 +730,85 @@ $timestamp = time();
     </div>
   </div>
 
-  <!-- Idle warning modal -->
-  <div class="modal-overlay hidden" id="idleWarningModal">
-    <div class="modal-dialog" style="max-width:380px;text-align:center">
-      <div style="margin-bottom:16px">
-        <i class="bi bi-exclamation-triangle" style="font-size:48px;color:var(--gold)"></i>
+  <!-- Edit product modal -->
+  <div class="modal-overlay hidden" id="editProductModal">
+    <div class="modal-dialog" style="max-width:440px">
+      <h3 data-i18n="products.edit">Edit product</h3>
+      <div class="edit-image-preview">
+        <img id="editCurrentImage" class="hidden" alt="Current product image" />
+        <div id="editImagePlaceholder" class="image-placeholder"><i class="bi bi-image"></i><span data-i18n="products.noImage">No image</span></div>
       </div>
-      <h3 data-i18n="idle.title">Session Expiring</h3>
-      <p id="idleWarningText" style="margin:12px 0 20px;color:var(--text-secondary)" data-i18n="idle.message">You have been inactive. Your session will expire in <strong id="idleCountdown">60</strong> seconds.</p>
-      <div class="modal-actions" style="justify-content:center">
-        <button type="button" class="gold-button" id="idleStayBtn"><i class="bi bi-arrow-counterclockwise"></i> <span data-i18n="idle.stay">Stay Logged In</span></button>
+      <div class="image-input-row">
+        <input id="editImageInput" type="file" accept="image/jpeg,image/png,image/jpg" data-i18n-aria-label="products.imageReplace" aria-label="Replace product image" />
+      </div>
+      <div class="form-hint-row">
+        <label class="form-hint"><input type="checkbox" id="editRemoveImage" /> <span data-i18n="products.imageRemove">Remove image</span></label>
+      </div>
+      <div class="product-edit-fields">
+        <input id="editNameInput" placeholder="Product name" data-i18n-placeholder="products.namePlaceholder" required />
+        <input id="editBuyingInput" type="number" min="0" step="1" placeholder="Buying price (TSH)" data-i18n-placeholder="products.buying" required />
+        <input id="editSellingInput" type="number" min="0" step="1" placeholder="Selling price (TSH)" data-i18n-placeholder="products.selling" required />
+        <input id="editMinPriceInput" type="number" min="0" step="1" placeholder="Min allowed selling price (TSH)" title="Minimum Allowed Selling Price" required />
+        <input id="editStockInput" type="number" min="0" step="1" placeholder="Stock quantity" data-i18n-placeholder="products.stock" />
+      </div>
+      <div class="modal-actions" style="margin-top:20px">
+        <button type="button" class="ghost-button" id="editProductCancelBtn" data-i18n="common.cancel">Cancel</button>
+        <button type="button" class="gold-button" id="editProductSave" data-i18n="products.saveProduct"><i class="bi bi-check-circle-fill"></i> Save product</button>
       </div>
     </div>
   </div>
 
-  <script src="assets/js/script.js?v=<?php echo $timestamp; ?>&bust=4"></script>
+  <!-- Promotion modal -->
+  <div class="modal-overlay hidden" id="promotionModal">
+    <div class="modal-dialog" style="max-width:540px">
+      <h3 id="promotionModalTitle" data-i18n="promotions.addNew">New promotion</h3>
+      <div class="promotion-fields">
+        <input id="promoNameInput" placeholder="Promotion name" data-i18n-placeholder="promotions.namePlaceholder" required />
+        <input id="promoDescriptionInput" placeholder="Description (optional)" data-i18n-placeholder="promotions.descPlaceholder" />
+        <label class="form-field"><span data-i18n="promotions.percentage">Discount %</span>
+          <input id="promoPercentageInput" type="number" min="1" max="100" step="1" required />
+        </label>
+        <div class="promo-date-row">
+          <label class="form-field"><span data-i18n="promotions.startDate">Start date</span><input id="promoStartDate" type="date" required /></label>
+          <label class="form-field"><span data-i18n="promotions.startTime">Start time (optional)</span><input id="promoStartTime" type="time" /></label>
+          <label class="form-field"><span data-i18n="promotions.endDate">End date</span><input id="promoEndDate" type="date" required /></label>
+          <label class="form-field"><span data-i18n="promotions.endTime">End time (optional)</span><input id="promoEndTime" type="time" /></label>
+        </div>
+        <label class="toggle-line"><input type="checkbox" id="promoAllProducts" /> <span data-i18n="promotions.allProducts">Apply to all products</span></label>
+        <div class="form-field" id="promoProductsField">
+          <span data-i18n="promotions.selectProducts">Select products</span>
+          <div class="promo-product-picker" id="promoProductPicker"></div>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:20px">
+        <button type="button" class="ghost-button" id="promotionCancelBtn" data-i18n="common.cancel">Cancel</button>
+        <button type="button" class="gold-button" id="promotionSaveBtn" data-i18n="promotions.save"><i class="bi bi-check-circle-fill"></i> Save promotion</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Idle session warning modal -->
+  <div class="modal-overlay hidden" id="idleWarningModal" role="alertdialog" aria-modal="true" aria-labelledby="idleWarningTitle" aria-describedby="idleWarningText">
+    <div class="modal-dialog idle-dialog">
+      <h3 class="idle-heading" id="idleWarningTitle" data-i18n="idle.heading">Your session is about to expire.</h3>
+      <p class="idle-message" id="idleWarningText" data-i18n="idle.message">Your session will end in 1 minute due to inactivity.</p>
+      <div class="idle-timer-wrap" aria-hidden="true">
+        <svg class="idle-ring" viewBox="0 0 120 120">
+          <circle class="idle-ring-track" cx="60" cy="60" r="52"></circle>
+          <circle class="idle-ring-progress" id="idleRingProgress" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="idle-timer-center">
+          <span class="idle-timer-number" id="idleCountdown" aria-live="polite">60</span>
+          <span class="idle-timer-label" data-i18n="idle.seconds">seconds</span>
+        </div>
+      </div>
+      <div class="idle-actions">
+        <button type="button" class="gold-button" id="idleStayBtn"><i class="bi bi-arrow-counterclockwise"></i> <span data-i18n="idle.continue">Continue Session</span></button>
+        <button type="button" class="ghost-button idle-logout-btn" id="idleLogoutBtn"><i class="bi bi-box-arrow-left"></i> <span data-i18n="idle.logout">Log Out</span></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/script.js?v=<?php echo $timestamp; ?>&bust=9"></script>
 </body>
 </html>

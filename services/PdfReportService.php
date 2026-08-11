@@ -1,0 +1,884 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Minimal, dependency-free PDF generator for professional A4 reports.
+ *
+ * Uses built-in Helvetica fonts (WinAnsi encoding) so no external font or
+ * Composer library is required. The store logo is embedded as JPEG when GD
+ * is available.
+ */
+class PdfReportService
+{
+    private const MARGIN = 40;       // left/right margin (pt)
+    private const HEADER_H = 46;     // running header height (pt)
+    private const FOOTER_H = 36;     // reserved footer space (pt)
+    private const SPACE_XS = 6;      // tight inline rhythm
+    private const SPACE_S = 10;      // small gap between related blocks
+    private const SPACE_M = 14;      // default internal gap
+    private const SPACE_L = 18;      // large gap between distinct blocks
+    private const SPACE_XL = 24;     // extra-large gap (masthead / divider)
+
+    // Body table typography / geometry
+    private const BODY_SIZE = 9.0;   // data cell font size (pt)
+    private const TH_SIZE = 9.0;     // table header font size (pt)
+    private const ROW_LINE_H = 11.5; // baseline advance between wrapped lines
+    private const ROW_PAD_TOP = 5.0; // space above the first text glyph
+    private const ROW_MIN_H = 18.0;  // smallest body row height
+    private const TH_H = 18.0;       // table header band height
+
+    private bool $landscape = false;
+    private float $pageW = 595.28;
+    private float $pageH = 841.89;
+    private float $contentW = 0;
+
+    private string $pageStream = '';
+    private array $pages = [];
+    private float $y = 0;
+
+    private array $meta = [];
+    private array $summary = [];
+    private array $sections = [];
+
+    private ?array $logo = null; // ['jpg' => string, 'w' => int, 'h' => int]
+
+    public function render(array $report, bool $landscape = false): string
+    {
+        $this->meta = $report['meta'] ?? [];
+        $this->summary = $report['summary'] ?? [];
+        $this->sections = $report['sections'] ?? [];
+        $this->landscape = $landscape;
+        $this->pageW = $landscape ? 841.89 : 595.28;
+        $this->pageH = $landscape ? 595.28 : 841.89;
+        $this->contentW = $this->pageW - 2 * self::MARGIN;
+        $this->pages = [];
+        $this->loadLogo();
+
+        $this->beginPage();
+        $this->renderTitleBlock();
+        $this->renderSummary();
+        foreach ($this->sections as $section) {
+            $this->renderSection($section);
+        }
+        $this->closePage();
+        $this->renderFooters();
+
+        return $this->assemble();
+    }
+
+    // ── Page management ────────────────────────────────────────────────────
+
+    private function beginPage(): void
+    {
+        $this->pageStream = '';
+        $this->y = self::HEADER_H;
+        $this->drawPageHeader();
+    }
+
+    private function closePage(): void
+    {
+        $this->pages[] = $this->pageStream;
+    }
+
+    private function ensureSpace(float $needed): void
+    {
+        if ($this->y + $needed > $this->pageH - self::FOOTER_H) {
+            $this->closePage();
+            $this->beginPage();
+        }
+    }
+
+    // ── Header / footer ────────────────────────────────────────────────────
+
+    private function drawPageHeader(): void
+    {
+        $x = self::MARGIN;
+        if ($this->logo !== null) {
+            $h = 20;
+            $w = $h * ($this->logo['w'] / max(1, $this->logo['h']));
+            $x += $w + 8;
+            $this->drawImage(self::MARGIN, 10, $w, $h);
+        }
+        $store = (string)($this->meta['store_name'] ?? 'Mpeli Outfit Store');
+        // Keep the store name inside its area and always leave room for the report title.
+        $storeMaxW = max(40.0, $this->pageW - self::MARGIN - $x - 90);
+        $store = $this->truncate($store, 14, $storeMaxW);
+        $this->text($store, 14, true, $x, 13, 'left');
+        $storeW = $this->textWidth($store, 14);
+        $title = (string)($this->meta['title'] ?? 'Report');
+        $maxTitleW = max(60.0, $this->pageW - self::MARGIN - ($x + $storeW) - 24);
+        $this->text($this->truncate($title, 11, $maxTitleW), 11, false, $this->pageW - self::MARGIN, 15, 'right');
+        $this->line(self::MARGIN, self::HEADER_H - 4, $this->pageW - self::MARGIN, self::HEADER_H - 4, 1.0, 'gold');
+    }
+
+    private function renderFooters(): void
+    {
+        $total = count($this->pages);
+        for ($i = 0; $i < $total; $i++) {
+            $this->pageStream = $this->pages[$i];
+            $this->drawPageFooter($i + 1, $total);
+            $this->pages[$i] = $this->pageStream;
+        }
+    }
+
+    private function drawPageFooter(int $pageNum, int $total): void
+    {
+        $fy = $this->pageH - 18;
+        $this->line(self::MARGIN, $fy - 2, $this->pageW - self::MARGIN, $fy - 2, 0.4, 'line');
+        $store = (string)($this->meta['store_name'] ?? 'Mpeli Outfit Store');
+        $half = max(60.0, ($this->pageW - 2 * self::MARGIN) / 2 - 16);
+        $this->text($this->truncate($store, 8, $half), 8, false, self::MARGIN, $fy + 4, 'left', 'muted');
+        $by = 'Generated by: ' . (string)($this->meta['generated_by'] ?? '');
+        $this->text($this->truncate($by, 8, $half * 2), 8, false, $this->pageW / 2, $fy + 4, 'center', 'muted');
+        $this->text('Page ' . $pageNum . ' of ' . $total, 8, false, $this->pageW - self::MARGIN, $fy + 4, 'right', 'muted');
+    }
+
+    // ── Content blocks ─────────────────────────────────────────────────────
+
+    private function renderTitleBlock(): void
+    {
+        $y = $this->y + self::SPACE_M;
+        $store = (string)($this->meta['store_name'] ?? 'Mpeli Outfit Store');
+        $title = strtoupper((string)($this->meta['title'] ?? 'Report'));
+        $address = (string)($this->meta['address'] ?? '');
+        $phone = (string)($this->meta['phone'] ?? '');
+
+        $this->text($this->truncate($store, 19, $this->contentW), 19, true, self::MARGIN, $y, 'left');
+        $y2 = $y + 19 * 1.3;
+        $sub = [];
+        if ($address !== '') {
+            $sub[] = $address;
+        }
+        if ($phone !== '') {
+            $sub[] = 'Tel: ' . $phone;
+        }
+        if (count($sub) > 0) {
+            $this->text($this->truncate(implode('  ', $sub), 9, $this->contentW), 9, false, self::MARGIN, $y2, 'left', 'muted');
+            $y2 += 9 * 1.3;
+        }
+        $this->text($this->truncate($title, 14, $this->contentW), 14, true, self::MARGIN, $y2, 'left', 'gold');
+
+        $role = (string)($this->meta['role'] ?? 'SELLER');
+        $infoLines = [
+            'Report Period: ' . $this->periodLabel(),
+            'Generated By: ' . (string)($this->meta['generated_by'] ?? ''),
+            'Generated On: ' . (string)($this->meta['generated_at'] ?? ''),
+            'User Role: ' . ($role === 'OWNER' ? 'Owner / Admin' : 'Seller'),
+        ];
+        $iy = $y;
+        $infoW = $this->contentW - 40;
+        foreach ($infoLines as $line) {
+            $this->text($this->truncate($line, 9, $infoW), 9, false, $this->pageW - self::MARGIN, $iy, 'right', 'muted');
+            $iy += 13;
+        }
+
+        $divider = max($y2 + self::SPACE_XL, $iy - 13 + self::SPACE_L);
+        $this->line(self::MARGIN, $divider, $this->pageW - self::MARGIN, $divider, 1.2, 'gold');
+        $this->y = $divider + self::SPACE_XL;
+    }
+
+    private function renderSummary(): void
+    {
+        $items = $this->summaryItems();
+        if (count($items) === 0) {
+            return;
+        }
+        $currency = (string)($this->meta['currency'] ?? 'TSH');
+        $cols = 3;
+        $colW = $this->contentW / $cols;
+        $cellH = 34;
+        $rows = (int)ceil(count($items) / $cols);
+        $this->ensureSpace(22 + $rows * $cellH + self::SPACE_L);
+        $this->sectionHeading('Report Summary');
+        $top = $this->y;
+
+        foreach ($items as $i => $item) {
+            $col = $i % $cols;
+            $row = intdiv($i, $cols);
+            $cx = self::MARGIN + $col * $colW;
+            $cy = $top + $row * $cellH;
+            $this->rectOutline($cx + 2, $cy + 1, $colW - 4, $cellH - 4, 'line');
+            // Label sits at the top-left of the box, the figure at the bottom-right.
+            $this->text($this->truncate((string)$item[0], 8.5, $colW - 14), 8.5, false, $cx + 9, $cy + 11, 'left', 'muted');
+            $value = $item[2]
+                ? $currency . ' ' . $this->fmtNum((float)$item[1])
+                : $this->fmtNum($item[1]);
+            $this->text($this->truncate($value, 11.5, $colW - 14), 11.5, true, $cx + $colW - 12, $cy + 25, 'right', 'dark');
+        }
+        $this->y = $top + $rows * $cellH + self::SPACE_L;
+    }
+
+    private function summaryItems(): array
+    {
+        $map = [
+            'transactions' => ['Total Transactions', false],
+            'items_sold' => ['Total Items Sold', false],
+            'revenue' => ['Revenue / Sales', true],
+            'discounts' => ['Discounts Given', true],
+            'buying_cost' => ['Buying Cost', true],
+            'gross_profit' => ['Gross Profit', true],
+            'expenses' => ['Expenses', true],
+            'net_profit' => ['Net Profit', true],
+            'avg_sale' => ['Average Sale Value', true],
+        ];
+        $items = [];
+        foreach ($map as $key => [$label, $money]) {
+            if (!array_key_exists($key, $this->summary)) {
+                continue;
+            }
+            $items[] = [$label, $this->summary[$key] ?? 0, $money];
+        }
+        return $items;
+    }
+
+    private function renderSection(array $section): void
+    {
+        $title = (string)($section['title'] ?? 'Section');
+        $columns = $section['columns'] ?? [];
+        $rows = $section['rows'] ?? [];
+
+        $firstH = 20;
+        if (count($rows) > 0 && count($columns) > 0) {
+            $firstH = $this->rowHeight($rows[0], $columns, $this->columnWidths($columns, $rows));
+        }
+        $this->ensureSpace(22 + 18 + self::SPACE_XS + $firstH);
+        $this->sectionHeading($title);
+        $this->drawTable($columns, $rows);
+
+        foreach (($section['subsections'] ?? []) as $sub) {
+            $subCols = $sub['columns'] ?? [];
+            $subRows = $sub['rows'] ?? [];
+            $subFirstH = 20;
+            if (count($subRows) > 0 && count($subCols) > 0) {
+                $subFirstH = $this->rowHeight($subRows[0], $subCols, $this->columnWidths($subCols, $subRows));
+            }
+            $this->ensureSpace(self::SPACE_M + 22 + self::SPACE_XS + $subFirstH);
+            $this->subHeading((string)($sub['title'] ?? ''));
+            $this->drawTable($subCols, $subRows);
+        }
+        $this->y += self::SPACE_L;
+    }
+
+    private function sectionHeading(string $text): void
+    {
+        $this->ensureSpace(22);
+        $this->rectFill(self::MARGIN, $this->y + 2, 3, 12, 'header');
+        $this->text(strtoupper($this->truncate($text, 12, $this->contentW - 16)), 12, true, self::MARGIN + 10, $this->y + 4, 'left', 'gold');
+        $this->y += 22;
+    }
+
+    private function subHeading(string $text): void
+    {
+        $this->ensureSpace(self::SPACE_M + 22);
+        $this->y += self::SPACE_M;
+        $this->text($this->truncate($text, 10, $this->contentW), 10, true, self::MARGIN, $this->y + 8, 'left', 'dark');
+        $this->y += 22;
+    }
+
+    // ── Tables ─────────────────────────────────────────────────────────────
+
+    private function drawTable(array $columns, array $rows): void
+    {
+        if (count($columns) === 0) {
+            return;
+        }
+        $widths = $this->columnWidths($columns, $rows);
+        $usableH = $this->pageH - self::HEADER_H - self::FOOTER_H;
+        $firstH = count($rows) > 0 ? $this->rowHeight($rows[0], $columns, $widths) : 20;
+
+        $this->ensureSpace(18 + self::SPACE_XS + $firstH);
+        $this->drawTableHeader($columns, $widths);
+
+        if (count($rows) === 0) {
+            $this->text('No records for this period.', 10, false, self::MARGIN, $this->y + 4, 'left', 'muted');
+            $this->y += 18;
+            return;
+        }
+
+        $rowIndex = 0;
+        foreach ($rows as $row) {
+            $cellLines = [];
+            $maxLines = 1;
+            foreach ($columns as $i => $col) {
+                $lines = $this->wrapText($this->formatCell($row[$i] ?? null, $col), self::BODY_SIZE, $widths[$i] - 8);
+                $cellLines[$i] = $lines;
+                $maxLines = max($maxLines, count($lines));
+            }
+            $rowH = $this->rowHFor($maxLines);
+
+            if ($rowH <= $usableH && $this->y + $rowH > $this->pageH - self::FOOTER_H) {
+                $this->closePage();
+                $this->beginPage();
+                $this->drawTableHeader($columns, $widths);
+            }
+
+            if ($rowIndex % 2 === 1) {
+                $this->rectFill(self::MARGIN, $this->y, $this->contentW, $rowH, 'zebra');
+            }
+            // Full grid: top rule, outer left/right edges and column separators.
+            $this->line(self::MARGIN, $this->y, self::MARGIN + $this->contentW, $this->y, 0.3, 'line');
+            $this->line(self::MARGIN, $this->y, self::MARGIN, $this->y + $rowH, 0.25, 'line');
+            $this->line(self::MARGIN + $this->contentW, $this->y, self::MARGIN + $this->contentW, $this->y + $rowH, 0.25, 'line');
+            $x = self::MARGIN;
+            $firstBase = $this->y + self::ROW_PAD_TOP + self::BODY_SIZE * 0.72;
+            foreach ($columns as $i => $col) {
+                if ($i > 0) {
+                    $this->line($x, $this->y, $x, $this->y + $rowH, 0.25, 'line');
+                }
+                $align = $col['align'] ?? 'left';
+                $lx = $align === 'right' ? $x + $widths[$i] - 6 : $x + 6;
+                foreach ($cellLines[$i] as $li => $line) {
+                    $this->text($line, self::BODY_SIZE, false, $lx, $firstBase + $li * self::ROW_LINE_H, $align);
+                }
+                $x += $widths[$i];
+            }
+            $this->y += $rowH;
+            $rowIndex++;
+        }
+
+        $this->line(self::MARGIN, $this->y, self::MARGIN + $this->contentW, $this->y, 0.3, 'line');
+    }
+
+    private function rowHeight(array $row, array $columns, array $widths): int
+    {
+        $maxLines = 1;
+        foreach ($columns as $i => $col) {
+            $lines = $this->wrapText($this->formatCell($row[$i] ?? null, $col), self::BODY_SIZE, $widths[$i] - 8);
+            $maxLines = max($maxLines, count($lines));
+        }
+        return $this->rowHFor($maxLines);
+    }
+
+    private function drawTableHeader(array $columns, array $widths): void
+    {
+        $rowH = self::TH_H;
+        if ($this->y + $rowH + self::SPACE_XS > $this->pageH - self::FOOTER_H) {
+            $this->closePage();
+            $this->beginPage();
+        }
+        $this->rectFill(self::MARGIN, $this->y, $this->contentW, $rowH, 'header');
+        $x = self::MARGIN;
+        $base = $this->y + 5.0 + self::TH_SIZE * 0.72;
+        foreach ($columns as $i => $col) {
+            $label = $this->truncate((string)($col['label'] ?? ''), self::TH_SIZE, max(10.0, $widths[$i] - 6));
+            $this->text($label, self::TH_SIZE, true, $x + $widths[$i] / 2, $base, 'center', 'white');
+            $x += $widths[$i];
+        }
+        // Leave a little breathing room between the header band and the first content row.
+        $this->y += $rowH + self::SPACE_XS;
+    }
+
+    /**
+     * Distribute the printable A4 width across the columns intelligently.
+     *
+     * Each column may carry a `min` (minimum width in pt) and a `flex`
+     * (grow factor) hint. When hints are missing, sensible defaults are
+     * derived from the column type (money / date / quantity / text).
+     *
+     * 1. Measure the natural width of every cell (header + data).
+     * 2. Clamp each column between its minimum and a per-type cap.
+     * 3. If there is spare width, give it to the flexible columns (product
+     *    names, descriptions) instead of stretching every column equally.
+     * 4. If the table is too wide, shrink the flexible columns first so
+     *    narrow columns (Qty, Stock) never become unreadably thin.
+     */
+    private function columnWidths(array $columns, array $rows = []): array
+    {
+        $n = count($columns);
+        if ($n === 0) {
+            return [];
+        }
+
+        $pad = 10;
+        $raw = [];
+        $minW = [];
+        $flex = [];
+        $sumFlex = 0.0;
+        foreach ($columns as $i => $col) {
+            $minW[$i] = $this->colMin($col);
+            $flex[$i] = $this->colFlex($col);
+            $sumFlex += $flex[$i];
+
+            $measured = $this->textWidth((string)($col['label'] ?? ''), self::TH_SIZE) * 1.1;
+            foreach ($rows as $row) {
+                if (!isset($row[$i]) || $row[$i] === null) {
+                    continue;
+                }
+                $measured = max($measured, $this->textWidth($this->formatCell($row[$i], $col), self::BODY_SIZE));
+            }
+            $cap = !empty($col['money']) ? 110.0 : 200.0;
+            $raw[$i] = max($minW[$i], min($cap, $measured + $pad));
+        }
+
+        $total = array_sum($raw);
+        if ($total <= $this->contentW) {
+            $leftover = $this->contentW - $total;
+            $widths = [];
+            foreach ($columns as $i => $col) {
+                $widths[$i] = $raw[$i] + ($sumFlex > 0 ? $leftover * $flex[$i] / $sumFlex : $leftover / $n);
+            }
+            return $widths;
+        }
+
+        // Table is wider than the page: shrink flexible columns first.
+        $overage = $total - $this->contentW;
+        $allowed = [];
+        $totalAllowed = 0.0;
+        foreach ($columns as $i => $col) {
+            $allowed[$i] = max(0.0, $raw[$i] - $minW[$i]);
+            $totalAllowed += $allowed[$i];
+        }
+        $widths = [];
+        if ($totalAllowed >= $overage) {
+            foreach ($columns as $i => $col) {
+                $widths[$i] = $raw[$i] - $overage * $allowed[$i] / max(1.0, $totalAllowed);
+            }
+        } else {
+            $sumMin = max(1.0, array_sum($minW));
+            foreach ($columns as $i => $col) {
+                $widths[$i] = max(24.0, $minW[$i] - ($overage - $totalAllowed) * $minW[$i] / $sumMin);
+            }
+        }
+        return $widths;
+    }
+
+    private function colMin(array $col): float
+    {
+        return (float)($col['min'] ?? self::defaultMinPt($col));
+    }
+
+    private function colFlex(array $col): float
+    {
+        return (float)($col['flex'] ?? self::defaultFlexPt($col));
+    }
+
+    public static function defaultMinPt(array $col): float
+    {
+        if (!empty($col['money'])) {
+            return 70.0;
+        }
+        $label = strtolower((string)($col['label'] ?? ''));
+        if (self::isNarrow($label)) {
+            return 38.0;
+        }
+        if (self::isDate($label)) {
+            return 60.0;
+        }
+        return 56.0;
+    }
+
+    public static function defaultFlexPt(array $col): float
+    {
+        if (!empty($col['money'])) {
+            return 1.6;
+        }
+        $label = strtolower((string)($col['label'] ?? ''));
+        if (self::isNarrow($label)) {
+            return 0.7;
+        }
+        if (self::isDate($label)) {
+            return 1.0;
+        }
+        if (self::isText($label)) {
+            return 2.4;
+        }
+        return 1.4;
+    }
+
+    /** Minimum width (pt) the whole set of columns needs to remain readable. */
+    public static function estimateMinWidth(array $columns): float
+    {
+        $sum = 0.0;
+        foreach ($columns as $col) {
+            $sum += (float)($col['min'] ?? self::defaultMinPt($col));
+        }
+        return $sum;
+    }
+
+    private static function isNarrow(string $label): bool
+    {
+        return str_contains($label, 'qty')
+            || str_contains($label, 'items')
+            || str_contains($label, 'stock')
+            || str_contains($label, 'reorder')
+            || str_contains($label, 'transactions');
+    }
+
+    private static function isDate(string $label): bool
+    {
+        return str_contains($label, 'date') || str_contains($label, 'time');
+    }
+
+    private static function isText(string $label): bool
+    {
+        return str_contains($label, 'product')
+            || str_contains($label, 'description')
+            || str_contains($label, 'note')
+            || str_contains($label, 'customer')
+            || str_contains($label, 'category')
+            || str_contains($label, 'seller');
+    }
+
+    private function rowHFor(int $lines): int
+    {
+        return (int)max(self::ROW_MIN_H, self::ROW_PAD_TOP + $lines * self::ROW_LINE_H + 2);
+    }
+
+    private function formatCell($value, array $col): string
+    {
+        $money = (bool)($col['money'] ?? false);
+        $currency = (string)($this->meta['currency'] ?? 'TSH');
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+        if (is_int($value)) {
+            return $money ? $currency . ' ' . $this->fmtNum($value) : $this->fmtNum($value);
+        }
+        if (is_float($value) || is_numeric($value)) {
+            $num = (float)$value;
+            return $money ? $currency . ' ' . $this->fmtNum($num) : $this->fmtNum($num);
+        }
+        return (string)$value;
+    }
+
+    // ── Low-level drawing ──────────────────────────────────────────────────
+
+    private function text(string $str, float $size, bool $bold, float $x, float $y, string $align = 'left', string $color = 'dark'): void
+    {
+        $str = $this->encode($str);
+        if ($str === '') {
+            return;
+        }
+        $width = $this->textWidth($str, $size);
+        if ($align === 'right') {
+            $x -= $width;
+        } elseif ($align === 'center') {
+            $x -= $width / 2;
+        }
+        $font = $bold ? '/F2' : '/F1';
+        $ty = $this->pageH - $y;
+        [$r, $g, $b] = $this->rgb($color);
+        $this->pageStream .= sprintf(
+            "BT %.3F %.3F %.3F rg %s %.2F Tf %.2F %.2F Td (%s) Tj ET\n",
+            $r, $g, $b, $font, $size, $x, $ty, $str
+        );
+    }
+
+    private function line(float $x1, float $y1, float $x2, float $y2, float $width = 0.4, string $color = 'line'): void
+    {
+        [$r, $g, $b] = $this->rgb($color);
+        $ty1 = $this->pageH - $y1;
+        $ty2 = $this->pageH - $y2;
+        $this->pageStream .= sprintf(
+            "q %.3F %.3F %.3F RG %.2F w %.2F %.2F m %.2F %.2F l S Q\n",
+            $r, $g, $b, $width, $x1, $ty1, $x2, $ty2
+        );
+    }
+
+    private function rectFill(float $x, float $y, float $w, float $h, string $color): void
+    {
+        [$r, $g, $b] = $this->rgb($color);
+        $ty = $this->pageH - $y - $h;
+        $this->pageStream .= sprintf(
+            "q %.3F %.3F %.3F rg %.2F %.2F %.2F %.2F re f Q\n",
+            $r, $g, $b, $x, $ty, $w, $h
+        );
+    }
+
+    private function rectOutline(float $x, float $y, float $w, float $h, string $color = 'line'): void
+    {
+        [$r, $g, $b] = $this->rgb($color);
+        $ty = $this->pageH - $y;
+        $ty2 = $this->pageH - $y - $h;
+        $this->pageStream .= sprintf(
+            "q %.3F %.3F %.3F RG 0.6 w %.2F %.2F m %.2F %.2F l %.2F %.2F l %.2F %.2F l %.2F %.2F l S Q\n",
+            $r, $g, $b, $x, $ty, $x + $w, $ty, $x + $w, $ty2, $x, $ty2, $x, $ty
+        );
+    }
+
+    private function drawImage(float $x, float $y, float $w, float $h): void
+    {
+        $ty = $this->pageH - $y - $h;
+        $this->pageStream .= sprintf("q %.2F 0 0 %.2F %.2F %.2F cm /Logo Do Q\n", $w, $h, $x, $ty);
+    }
+
+    private function rgb(string $name): array
+    {
+        switch ($name) {
+            case 'gold':
+                return [0.788, 0.635, 0.306];
+            case 'header':
+                return [0.788, 0.635, 0.306];
+            case 'zebra':
+                return [0.957, 0.945, 0.918];
+            case 'dark':
+                return [0.13, 0.13, 0.15];
+            case 'muted':
+                return [0.45, 0.45, 0.48];
+            case 'white':
+                return [1, 1, 1];
+            default:
+                return [0.85, 0.85, 0.87];
+        }
+    }
+
+    private function fmtNum($value): string
+    {
+        return number_format((float)$value, 0, '.', ',');
+    }
+
+    private function periodLabel(): string
+    {
+        $start = (string)($this->meta['period_start'] ?? '');
+        $end = (string)($this->meta['period_end'] ?? '');
+        if ($start === '' || $end === '') {
+            return 'All Time';
+        }
+        $format = fn (string $d): string => date('d F Y', strtotime($d));
+        return $format($start) . ' - ' . $format($end);
+    }
+
+    // ── Encoding / metrics ─────────────────────────────────────────────────
+
+    private function encode(string $s): string
+    {
+        $s = str_replace(["\r", "\n", "\t"], [' ', ' ', ' '], $s);
+        if (function_exists('mb_convert_encoding')) {
+            $s = mb_convert_encoding($s, 'Windows-1252', 'UTF-8');
+        }
+        $s = str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $s);
+        return $s;
+    }
+
+    private function textWidth(string $s, float $size): float
+    {
+        $w = 0.0;
+        $len = strlen($s);
+        for ($i = 0; $i < $len; $i++) {
+            $w += $this->charFactor($s[$i]);
+        }
+        return $w * $size;
+    }
+
+    private function charFactor(string $c): float
+    {
+        $code = ord($c);
+        if ($code === 32) {
+            return 0.28;
+        }
+        if ($code >= 48 && $code <= 57) {
+            return 0.56;
+        }
+        if ($code >= 65 && $code <= 90) {
+            return 0.66;
+        }
+        if ($code >= 97 && $code <= 122) {
+            return 0.55;
+        }
+        if (in_array($code, [46, 44, 58, 59], true)) {
+            return 0.28;
+        }
+        if ($code === 45 || $code === 39) {
+            return 0.33;
+        }
+        return 0.55;
+    }
+
+    private function wrapText(string $s, float $size, float $maxWidth): array
+    {
+        if ($s === '') {
+            return [''];
+        }
+        $lines = [];
+        $current = '';
+        $words = preg_split('/\s+/', $s) ?: [];
+        foreach ($words as $word) {
+            while ($word !== '' && $this->textWidth($word, $size) > $maxWidth) {
+                $fit = $this->fitPrefix($word, $size, $maxWidth);
+                if ($fit <= 0) {
+                    $fit = 1;
+                }
+                $piece = substr($word, 0, $fit);
+                if ($current !== '') {
+                    $lines[] = $current;
+                    $current = '';
+                }
+                $lines[] = $piece;
+                $word = substr($word, $fit);
+            }
+            if ($word === '') {
+                continue;
+            }
+            $candidate = $current === '' ? $word : $current . ' ' . $word;
+            if ($current !== '' && $this->textWidth($candidate, $size) > $maxWidth) {
+                $lines[] = $current;
+                $current = $word;
+            } else {
+                $current = $candidate;
+            }
+        }
+        if ($current !== '') {
+            $lines[] = $current;
+        }
+        return count($lines) > 0 ? $lines : [''];
+    }
+
+    private function fitPrefix(string $word, float $size, float $maxWidth): int
+    {
+        $lo = 1;
+        $hi = strlen($word);
+        $best = 1;
+        while ($lo <= $hi) {
+            $mid = intdiv($lo + $hi, 2);
+            if ($this->textWidth(substr($word, 0, $mid), $size) <= $maxWidth) {
+                $best = $mid;
+                $lo = $mid + 1;
+            } else {
+                $hi = $mid - 1;
+            }
+        }
+        return $best;
+    }
+
+    private function truncate(string $s, float $size, float $maxWidth): string
+    {
+        if ($this->textWidth($s, $size) <= $maxWidth) {
+            return $s;
+        }
+        $ellipsis = '...';
+        $max = $maxWidth - $this->textWidth($ellipsis, $size);
+        for ($i = 1; $i < strlen($s); $i++) {
+            $prefix = substr($s, 0, strlen($s) - $i);
+            if ($this->textWidth($prefix, $size) <= $max) {
+                return $prefix . $ellipsis;
+            }
+        }
+        return $ellipsis;
+    }
+
+    // ── Logo ───────────────────────────────────────────────────────────────
+
+    private function loadLogo(): void
+    {
+        if (!function_exists('imagecreatefrompng')) {
+            return;
+        }
+        $path = __DIR__ . '/../assets/images/logo.png';
+        if (!is_file($path)) {
+            return;
+        }
+        $img = @imagecreatefrompng($path);
+        if (!$img) {
+            return;
+        }
+        $w = imagesx($img);
+        $h = imagesy($img);
+        $canvas = imagecreatetruecolor($w, $h);
+        if ($canvas) {
+            $white = imagecolorallocate($canvas, 255, 255, 255);
+            imagefill($canvas, 0, 0, $white);
+            imagecopy($canvas, $img, 0, 0, 0, 0, $w, $h);
+        } else {
+            $canvas = $img;
+        }
+        ob_start();
+        imagejpeg($canvas, null, 88);
+        $jpg = (string)ob_get_clean();
+        imagedestroy($img);
+        if ($canvas !== $img) {
+            imagedestroy($canvas);
+        }
+        if ($jpg === '') {
+            return;
+        }
+        $this->logo = ['jpg' => $jpg, 'w' => $w, 'h' => $h];
+    }
+
+    // ── Assembly ───────────────────────────────────────────────────────────
+
+    private function assemble(): string
+    {
+        $pageCount = count($this->pages);
+        if ($pageCount === 0) {
+            $this->pages[] = '';
+            $pageCount = 1;
+        }
+
+        $catalogId = 1;
+        $pagesId = 2;
+        $firstPageId = 3;
+        $resourcesId = $firstPageId + $pageCount;
+        $helvId = $resourcesId + 1;
+        $helvBId = $helvId + 1;
+        $nextId = $helvBId + 1;
+
+        $logoId = null;
+        if ($this->logo !== null) {
+            $logoId = $nextId++;
+        }
+        $contentIds = [];
+        for ($i = 0; $i < $pageCount; $i++) {
+            $contentIds[] = $nextId++;
+        }
+
+        $kids = [];
+        for ($i = 0; $i < $pageCount; $i++) {
+            $kids[] = ($firstPageId + $i) . ' 0 R';
+        }
+
+        $objects = [];
+        $objects[$catalogId] = "<< /Type /Catalog /Pages {$pagesId} 0 R >>";
+        $objects[$pagesId] = "<< /Type /Pages /Kids [" . implode(' ', $kids) . "] /Count {$pageCount} >>";
+
+        $mediaBox = sprintf('[0 0 %.2F %.2F]', $this->pageW, $this->pageH);
+        for ($i = 0; $i < $pageCount; $i++) {
+            $objects[$firstPageId + $i] = sprintf(
+                "<< /Type /Page /Parent %d 0 R /MediaBox %s /Resources %d 0 R /Contents %d 0 R >>",
+                $pagesId,
+                $mediaBox,
+                $resourcesId,
+                $contentIds[$i]
+            );
+        }
+
+        $xobj = $logoId !== null ? " /XObject << /Logo {$logoId} 0 R >>" : '';
+        $objects[$resourcesId] = "<< /Font << /F1 {$helvId} 0 R /F2 {$helvBId} 0 R >>{$xobj} >>";
+        $objects[$helvId] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+        $objects[$helvBId] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+
+        if ($logoId !== null) {
+            $j = $this->logo;
+            $objects[$logoId] = sprintf(
+                "<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n%s\nendstream",
+                $j['w'],
+                $j['h'],
+                strlen($j['jpg']),
+                $j['jpg']
+            );
+        }
+
+        for ($i = 0; $i < $pageCount; $i++) {
+            $len = strlen($this->pages[$i]);
+            $objects[$contentIds[$i]] = "<< /Length {$len} >>\nstream\n" . $this->pages[$i] . "\nendstream";
+        }
+
+        ksort($objects);
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+        foreach ($objects as $id => $body) {
+            $offsets[$id] = strlen($pdf);
+            $pdf .= "{$id} 0 obj\n{$body}\nendobj\n";
+        }
+
+        $xrefStart = strlen($pdf);
+        $count = count($objects);
+        $pdf .= "xref\n0 " . ($count + 1) . "\n";
+        $pdf .= "0000000000 65535 f \n";
+        for ($id = 1; $id <= $count; $id++) {
+            $pdf .= sprintf("%010d 00000 n \n", $offsets[$id]);
+        }
+        $pdf .= "trailer\n<< /Size " . ($count + 1) . " /Root {$catalogId} 0 R >>\nstartxref\n{$xrefStart}\n%%EOF";
+
+        return $pdf;
+    }
+}

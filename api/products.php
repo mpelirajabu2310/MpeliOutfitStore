@@ -25,7 +25,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     PermissionService::requirePermission($user['role'], 'products.create');
     require_csrf();
-    $data = read_json_body();
+
+    $isMultipart = isset($_SERVER['CONTENT_TYPE']) && stripos($_SERVER['CONTENT_TYPE'], 'multipart/form-data') !== false;
+    $data = $isMultipart ? $_POST : read_json_body();
+    $imageFile = null;
+    if ($isMultipart && isset($_FILES['product_image']) && is_array($_FILES['product_image']) && (int)($_FILES['product_image']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $imageFile = $_FILES['product_image'];
+    }
 
     $name = trim((string)($data['name'] ?? ''));
     $buying = (float)($data['buying_price'] ?? 0);
@@ -69,8 +75,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $result = $productService->addProduct($name, $buying, $selling, $minPrice, $stock, $user['id'], $threshold);
+
+        $imageError = null;
+        if ($imageFile !== null) {
+            try {
+                require_once __DIR__ . '/../services/ImageService.php';
+                $imageService = new ImageService();
+                $imagePath = $imageService->processUploadedImage($imageFile, (int)$result['product_id']);
+                $productService->setProductImage((int)$result['product_id'], $imagePath);
+            } catch (RuntimeException $exception) {
+                $imageError = $exception->getMessage();
+                error_log('[products] image error: ' . $exception->getMessage());
+            }
+        }
+
+        $payload = ['success' => true, 'message' => 'Product created successfully.', 'product_id' => $result['product_id']];
+        if ($imageError !== null) {
+            $payload['image_error'] = $imageError;
+        }
         log_activity((int)$user['id'], 'product_created', "Product: {$name}, ID: {$result['product_id']}");
-        respond(['success' => true, 'message' => 'Product created successfully.', 'product_id' => $result['product_id']], 201);
+        respond($payload, 201);
     } catch (Throwable $exception) {
         error_log('[products] create error: ' . $exception->getMessage());
         respond(['success' => false, 'message' => 'Failed to create product.'], 500);

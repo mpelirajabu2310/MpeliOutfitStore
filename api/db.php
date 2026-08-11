@@ -22,7 +22,8 @@ set_exception_handler(function (Throwable $e) {
 
 // ─── Session Configuration ──────────────────────────────────────────────────
 $sessionLifetime = 86400;
-$idleTimeout = 900; // 15 minutes of inactivity
+$idleTimeout = 180; // 3 minutes of inactivity (matches the client idle timer)
+$warningDuration = 60; // 1 minute warning countdown before automatic logout
 $isSecure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
 
 ini_set('session.use_strict_mode', '1');
@@ -43,7 +44,14 @@ session_set_cookie_params([
 ]);
 session_start();
 
-// Idle timeout: destroy session if no activity for $idleTimeout seconds
+// Idle timeout: destroy the session if there has been no genuine user activity
+// for $idleTimeout seconds.
+//
+// Background requests (chart refreshes, dashboard auto-updates, AJAX polling)
+// send the "X-Background: 1" header and must NOT reset the idle timer, so they
+// never keep an otherwise idle session alive.
+$isBackgroundRequest = isset($_SERVER['HTTP_X_BACKGROUND']) && $_SERVER['HTTP_X_BACKGROUND'] === '1';
+
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $idleTimeout) {
     $oldUserId = $_SESSION['user_id'] ?? null;
     session_unset();
@@ -53,7 +61,12 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) >
         log_activity((int)$oldUserId, 'session_timeout', 'Session expired due to inactivity');
     }
 }
-$_SESSION['last_activity'] = time();
+
+// Only genuine user requests (everything except background polling) extend the
+// server-side idle window.
+if (!$isBackgroundRequest) {
+    $_SESSION['last_activity'] = time();
+}
 
 // ─── Security Headers ───────────────────────────────────────────────────────
 if (!headers_sent()) {
@@ -217,6 +230,16 @@ function respond(array $payload, int $status = 200): void
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_NUMERIC_CHECK);
     exit;
+}
+
+/**
+ * Marks the current request as genuine user activity, refreshing the
+ * server-side idle window. Used by the heartbeat endpoint when the client
+ * detects real interaction (mouse, keyboard, touch, scroll).
+ */
+function touch_session_activity(): void
+{
+    $_SESSION['last_activity'] = time();
 }
 
 function current_user(PDO $pdo): ?array

@@ -11,15 +11,18 @@ $user = require_login($pdo);
 $isOwner = $user['role'] === 'OWNER';
 
 require_once __DIR__ . '/../services/DashboardService.php';
+require_once __DIR__ . '/../services/ReportService.php';
 require_once __DIR__ . '/../services/PermissionService.php';
 
 PermissionService::requirePermission($user['role'], 'dashboard.view');
 
 $dashboardService = new DashboardService();
+$reportService = new ReportService();
 
 $sellerId = $isOwner ? null : $user['id'];
 
 $summary = $dashboardService->getDashboardSummary($sellerId, $isOwner);
 $summary['success'] = true;
+$summary['analytics'] = $reportService->getDashboardAnalytics($sellerId, $isOwner);
 $summary['permissions'] = PermissionService::getPermissions($user['role']);
 respond($summary);

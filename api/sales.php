@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require_once __DIR__ . '/../services/PermissionService.php';
+require_once __DIR__ . '/../services/SalesService.php';
 PermissionService::requirePermission($user['role'], 'sales.create');
 
 require_csrf();
@@ -23,12 +24,22 @@ $paymentMethod = (string)($data['payment_method'] ?? 'cash');
 if (!in_array($paymentMethod, ['cash', 'mobile_money', 'card'], true)) {
     respond(['success' => false, 'message' => 'Invalid payment method.'], 422);
 }
+$requestId = (string)($data['request_id'] ?? '');
+if ($requestId !== '' && (strlen($requestId) > 64 || !preg_match('/^[A-Za-z0-9._:-]+$/', $requestId))) {
+    respond(['success' => false, 'message' => 'Invalid request_id.'], 422);
+}
+$bulkDiscountPercent = null;
+if (isset($data['bulk_discount_percent']) && $data['bulk_discount_percent'] !== null && $data['bulk_discount_percent'] !== '') {
+    $bulkDiscountPercent = (float)$data['bulk_discount_percent'];
+    if ($bulkDiscountPercent <= 0 || $bulkDiscountPercent > SalesService::MAX_BULK_DISCOUNT_PERCENT) {
+        respond(['success' => false, 'message' => 'Bulk discount percentage is outside the allowed range.'], 422);
+    }
+}
 
-require_once __DIR__ . '/../services/SalesService.php';
 $salesService = new SalesService();
 
 try {
-    $result = $salesService->createSale($items, $user['id'], $paymentMethod);
+    $result = $salesService->createSale($items, $user['id'], $paymentMethod, $requestId ?: null, $bulkDiscountPercent);
 
     log_activity((int)$user['id'], 'sale_completed', "Receipt: {$result['receipt_number']}, Amount: {$result['total_amount']}");
 

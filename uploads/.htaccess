@@ -1,0 +1,20 @@
+# Product image uploads - Mpeli OutFit Store
+# Never execute server-side code from this directory.
+
+Options -Indexes
+
+# Deny execution of any server-side / executable script
+<FilesMatch "\.(php|php3|php4|php5|php7|php8|phtml|phar|pl|py|cgi|asp|aspx|sh|js|html?|svg)$">
+    Require all denied
+</FilesMatch>
+
+# Ensure WebP images are served with the correct MIME type
+AddType image/webp .webp
+
+# Long-lived caching for optimized images
+<IfModule mod_headers.c>
+    <FilesMatch "\.(webp|jpg|jpeg|png)$">
+        Header set Cache-Control "public, max-age=2592000, immutable"
+        Header set X-Content-Type-Options "nosniff"
+    </FilesMatch>
+</IfModule>
