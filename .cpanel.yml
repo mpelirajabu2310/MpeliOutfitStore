@@ -1,4 +1,4 @@
 ---
 deployment:
   tasks:
-    - /bin/cp -R ./* /home/mpelijgto/public_html/
+    - /bin/rsync -av --exclude='.git' --exclude='backups' --exclude='uploads' --exclude='.cpanel.yml' ./ /home/mpeljgto/public_html/
