@@ -22,6 +22,9 @@ class ExcelReportService
     /** sheet names already used (Excel forbids duplicates) */
     private array $usedNames = [];
 
+    /** @var array{jpg: string, w: int, h: int}|null Logo with black circular badge */
+    private ?array $logo = null;
+
     public function render(array $report): string
     {
         $this->parts = [];
@@ -29,10 +32,13 @@ class ExcelReportService
         $this->meta = $report['meta'] ?? [];
         $this->summary = $report['summary'] ?? [];
         $this->sections = $report['sections'] ?? [];
+        $this->logo = null;
 
         if (!function_exists('gzdeflate')) {
             throw new RuntimeException('The zlib extension is required to generate XLSX reports.');
         }
+
+        $this->loadLogo();
 
         $sheetCount = 1;
         $rels = [];
@@ -63,6 +69,14 @@ class ExcelReportService
         $this->addPart('docProps/core.xml', $this->corePropsXml());
         $this->addPart('docProps/app.xml', $this->appPropsXml($rels));
 
+        // Embed logo image + drawing in summary sheet
+        if ($this->logo !== null) {
+            $this->addPart('xl/media/image1.png', $this->logo['jpg']);
+            $this->addPart('xl/drawings/drawing1.xml', $this->drawingXml());
+            $this->addPart('xl/drawings/_rels/drawing1.xml.rels', $this->drawingRelsXml());
+            $this->addPart('xl/worksheets/_rels/sheet1.xml.rels', $this->sheetRelsXml());
+        }
+
         return $this->buildZip();
     }
 
@@ -75,12 +89,20 @@ class ExcelReportService
             $overrides .= '<Override PartName="/xl/worksheets/sheet' . $i .
                 '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
         }
+        $drawingOverride = $this->logo !== null
+            ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+            : '';
+        $imageDefault = $this->logo !== null
+            ? '<Default Extension="png" ContentType="image/png"/>'
+            : '';
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' .
             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' .
             '<Default Extension="xml" ContentType="application/xml"/>' .
+            $imageDefault .
             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' .
             $overrides .
+            $drawingOverride .
             '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' .
             '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' .
             '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' .
@@ -607,6 +629,103 @@ class ExcelReportService
     private function hasLeadingZero(string $s): bool
     {
         return strlen($s) > 1 && $s[0] === '0' && $s[1] !== '.';
+    }
+
+    // ── Logo / Drawing ─────────────────────────────────────────────────────
+
+    private function loadLogo(): void
+    {
+        if (!function_exists('imagecreatefrompng')) {
+            return;
+        }
+        $path = __DIR__ . '/../assets/images/logo.png';
+        if (!is_file($path)) {
+            return;
+        }
+        $img = @imagecreatefrompng($path);
+        if (!$img) {
+            return;
+        }
+        $w = imagesx($img);
+        $h = imagesy($img);
+
+        // Build a black circular badge behind the logo (matches login screen)
+        $pad = (int)round(max($w, $h) * 0.22);
+        $d   = max($w, $h) + $pad * 2;
+        $canvas = imagecreatetruecolor($d, $d);
+
+        imagealphablending($canvas, false);
+        $transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+        imagefill($canvas, 0, 0, $transparent);
+        imagealphablending($canvas, true);
+
+        $black = imagecolorallocate($canvas, 17, 16, 14);
+        imagefilledellipse($canvas, (int)round($d / 2), (int)round($d / 2), $d, $d, $black);
+
+        $gold = imagecolorallocate($canvas, 201, 162, 78);
+        imagesetthickness($canvas, 2);
+        imageellipse($canvas, (int)round($d / 2), (int)round($d / 2), $d, $d, $gold);
+
+        imagecopy($canvas, $img, (int)round(($d - $w) / 2), (int)round(($d - $h) / 2),
+                  0, 0, $w, $h);
+
+        ob_start();
+        imagepng($canvas, null);
+        $png = (string)ob_get_clean();
+        imagedestroy($img);
+        imagedestroy($canvas);
+
+        if ($png === '') {
+            return;
+        }
+        $this->logo = ['jpg' => $png, 'w' => $d, 'h' => $d];
+    }
+
+    /**
+     * OOXML drawing XML – places the logo in the top-left of the summary sheet.
+     * Size: 60pt × 60pt circle badge, positioned at cell A1.
+     */
+    private function drawingXml(): string
+    {
+        // 1 pt = 12700 EMUs; 60pt logo badge
+        $emuSize = 60 * 12700;
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ' .
+            'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' .
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' .
+            '<xdr:oneCellAnchor>' .
+            '<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' .
+            '<xdr:ext cx="' . $emuSize . '" cy="' . $emuSize . '"/>' .
+            '<xdr:pic>' .
+            '<xdr:nvPicPr>' .
+            '<xdr:cNvPr id="1" name="Store Logo"/>' .
+            '<xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr>' .
+            '</xdr:nvPicPr>' .
+            '<xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' .
+            '<xdr:spPr>' .
+            '<a:xfrm><a:off x="0" y="0"/><a:ext cx="' . $emuSize . '" cy="' . $emuSize . '"/></a:xfrm>' .
+            '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>' .
+            '</xdr:spPr>' .
+            '</xdr:pic>' .
+            '<xdr:clientData/>' .
+            '</xdr:oneCellAnchor>' .
+            '</xdr:wsDr>';
+    }
+
+    private function drawingRelsXml(): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' .
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>' .
+            '</Relationships>';
+    }
+
+    private function sheetRelsXml(): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' .
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>' .
+            '</Relationships>';
     }
 
     // ── ZIP assembly ───────────────────────────────────────────────────────

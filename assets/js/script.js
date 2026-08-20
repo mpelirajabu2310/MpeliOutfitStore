@@ -1678,6 +1678,23 @@ function closeSidebar() {
   document.body.classList.remove("sidebar-open");
 }
 
+// Auto-close sidebar when viewport crosses the 900px breakpoint
+let _lastViewportWidth = window.innerWidth;
+window.addEventListener("resize", () => {
+  const w = window.innerWidth;
+  if ((_lastViewportWidth > 900 && w <= 900) || (_lastViewportWidth <= 900 && w > 900)) {
+    closeSidebar();
+  }
+  _lastViewportWidth = w;
+});
+
+// Prevent background scroll when a modal is open
+const _bodyScrollLockObserver = new MutationObserver(() => {
+  const anyModalOpen = document.querySelectorAll(".modal-overlay:not(.hidden), .dialog:not(.hidden)").length > 0;
+  document.body.style.overflow = anyModalOpen ? "hidden" : "";
+});
+_bodyScrollLockObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+
 document.querySelector("#logoutButton")?.addEventListener("click", async () => {
   try {
     await apiRequest("api/logout.php", { method: "POST" });

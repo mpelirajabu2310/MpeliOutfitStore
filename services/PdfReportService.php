@@ -143,7 +143,17 @@ class PdfReportService
         $address = (string)($this->meta['address'] ?? '');
         $phone = (string)($this->meta['phone'] ?? '');
 
-        $this->text($this->truncate($store, 19, $this->contentW), 19, true, self::MARGIN, $y, 'left');
+        // Draw logo with black circle badge on the left of the title block
+        $textX = self::MARGIN;
+        if ($this->logo !== null) {
+            $logoH = 36;
+            $logoW = $logoH * ($this->logo['w'] / max(1, $this->logo['h']));
+            $this->drawImage(self::MARGIN, $y - 4, $logoW, $logoH);
+            $textX += $logoW + 10;
+        }
+
+        $textW = $this->pageW - self::MARGIN - $textX;
+        $this->text($this->truncate($store, 19, $textW), 19, true, $textX, $y, 'left');
         $y2 = $y + 19 * 1.3;
         $sub = [];
         if ($address !== '') {
@@ -153,10 +163,10 @@ class PdfReportService
             $sub[] = 'Tel: ' . $phone;
         }
         if (count($sub) > 0) {
-            $this->text($this->truncate(implode('  ', $sub), 9, $this->contentW), 9, false, self::MARGIN, $y2, 'left', 'muted');
+            $this->text($this->truncate(implode('  ', $sub), 9, $textW), 9, false, $textX, $y2, 'left', 'muted');
             $y2 += 9 * 1.3;
         }
-        $this->text($this->truncate($title, 14, $this->contentW), 14, true, self::MARGIN, $y2, 'left', 'gold');
+        $this->text($this->truncate($title, 14, $textW), 14, true, $textX, $y2, 'left', 'gold');
 
         $role = (string)($this->meta['role'] ?? 'SELLER');
         $infoLines = [
@@ -773,25 +783,41 @@ class PdfReportService
         }
         $w = imagesx($img);
         $h = imagesy($img);
-        $canvas = imagecreatetruecolor($w, $h);
-        if ($canvas) {
-            $white = imagecolorallocate($canvas, 255, 255, 255);
-            imagefill($canvas, 0, 0, $white);
-            imagecopy($canvas, $img, 0, 0, 0, 0, $w, $h);
-        } else {
-            $canvas = $img;
-        }
+
+        // Build a black circular badge behind the logo (matches login screen)
+        $pad = (int)round(max($w, $h) * 0.22);
+        $d   = max($w, $h) + $pad * 2;
+        $canvas = imagecreatetruecolor($d, $d);
+
+        // Transparent canvas
+        imagealphablending($canvas, false);
+        $transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+        imagefill($canvas, 0, 0, $transparent);
+        imagealphablending($canvas, true);
+
+        // Black filled circle (#11100e)
+        $black = imagecolorallocate($canvas, 17, 16, 14);
+        imagefilledellipse($canvas, (int)round($d / 2), (int)round($d / 2), $d, $d, $black);
+
+        // Gold border ring (#c9a24e), 2 pt
+        $gold = imagecolorallocate($canvas, 201, 162, 78);
+        imagesetthickness($canvas, 2);
+        imageellipse($canvas, (int)round($d / 2), (int)round($d / 2), $d, $d, $gold);
+
+        // Composite the logo centered inside the circle
+        imagecopy($canvas, $img, (int)round(($d - $w) / 2), (int)round(($d - $h) / 2),
+                  0, 0, $w, $h);
+
         ob_start();
         imagejpeg($canvas, null, 88);
         $jpg = (string)ob_get_clean();
         imagedestroy($img);
-        if ($canvas !== $img) {
-            imagedestroy($canvas);
-        }
+        imagedestroy($canvas);
+
         if ($jpg === '') {
             return;
         }
-        $this->logo = ['jpg' => $jpg, 'w' => $w, 'h' => $h];
+        $this->logo = ['jpg' => $jpg, 'w' => $d, 'h' => $d];
     }
 
     // ── Assembly ───────────────────────────────────────────────────────────

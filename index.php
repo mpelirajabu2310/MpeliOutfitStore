@@ -383,9 +383,9 @@ $timestamp = time();
           <article class="stat-card danger"><span data-i18n="inventory.outOfStock">Out of Stock</span><strong id="inventoryOutStock">0</strong><small data-i18n="inventory.unavailable">Unavailable items</small></article>
         </section>
         <section class="inventory-list">
-          <article class="panel"><h3 data-i18n="inventory.allProducts">All Products Stock</h3><ul id="allProductsList" class="inventory-items"></ul></article>
-          <article class="panel stock-warning"><h3 data-i18n="inventory.lowStockWarning">Low stock warning</h3><ul id="lowStockList" class="inventory-items"><li data-i18n="inventory.noLowStock">No low stock items.</li></ul></article>
           <article class="panel stock-out"><h3 data-i18n="inventory.outStockSection">Out of stock</h3><ul id="outStockList" class="inventory-items"><li data-i18n="inventory.noOutStock">No out of stock items.</li></ul></article>
+          <article class="panel stock-warning"><h3 data-i18n="inventory.lowStockWarning">Low stock warning</h3><ul id="lowStockList" class="inventory-items"><li data-i18n="inventory.noLowStock">No low stock items.</li></ul></article>
+          <article class="panel"><h3 data-i18n="inventory.allProducts">All Products Stock</h3><ul id="allProductsList" class="inventory-items"></ul></article>
         </section>
       </main>
       <main class="page" id="reports">
