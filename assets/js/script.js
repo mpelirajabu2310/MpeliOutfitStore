@@ -769,7 +769,7 @@ function formatChartDay(day) {
   return Number.isNaN(date.getTime()) ? day : date.toLocaleDateString(undefined, { weekday: "short" });
 }
 
-function renderBarChart(container, chart, hasData, valueKey = "value") {
+function renderBarChart(container, chart, hasData, valueKey = "value", showDayLabels = false) {
   if (!container) return;
   if (!hasData || !chart?.length) {
     container.innerHTML = `<p class="empty-state">${t("dashboard.noChartData")}</p>`;
@@ -778,16 +778,21 @@ function renderBarChart(container, chart, hasData, valueKey = "value") {
 
   const max = Math.max(...chart.map(item => Number(item[valueKey] ?? item.revenue ?? item.value ?? 0)), 1);
   const width = 700;
-  const height = 220;
+  const labelSpace = showDayLabels ? 36 : 0;
+  const height = 220 + labelSpace;
   const gap = 18;
   const barWidth = Math.floor((width - gap * (chart.length + 1)) / chart.length);
   const bars = chart.map((item, index) => {
     const amount = Number(item[valueKey] ?? item.revenue ?? item.value ?? 0);
     const barHeight = Math.max(18, Math.round((amount / max) * 180));
     const x = gap + index * (barWidth + gap);
-    const y = height - barHeight - 20;
+    const y = height - barHeight - 20 - labelSpace;
     const label = item.product_name || formatChartDay(item.sale_day || item.report_month);
-    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}"><title>${escapeHtml(label)}: ${money(amount)}</title></rect>`;
+    const title = `<title>${escapeHtml(label)}: ${money(amount)}</title>`;
+    const dayLabel = showDayLabels && item.sale_day
+      ? `<text x="${x + barWidth / 2}" y="${height - 4}" text-anchor="middle" class="chart-day-label">${escapeHtml(formatChartDay(item.sale_day))}</text>`
+      : "";
+    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}">${title}</rect>${dayLabel}`;
   }).join("");
   container.innerHTML = `<svg class="sales-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${t("aria.salesAnalyticsChart")}">${bars}</svg>`;
 }
@@ -852,16 +857,6 @@ async function loadDashboard(options = {}) {
   setOwnerStat("#monthlyExpenses", payload.stats.monthly_expenses);
   setOwnerStat("#monthlyNetProfit", payload.stats.monthly_net_profit);
 
-  const summary = document.querySelector("#dashboardSummaryText");
-  if (summary) {
-    summary.textContent = payload.stats.total_sales > 0
-      ? t("dashboard.summaryLive", {
-          sales: payload.stats.total_sales,
-          revenue: money(payload.stats.daily_revenue)
-        })
-      : t("dashboard.storeFloorEmpty");
-  }
-
   renderStockAlerts(payload.stock_alerts);
 
   const rows = payload.recent_sales.map(sale => `
@@ -879,9 +874,8 @@ async function loadDashboard(options = {}) {
     <tr><td colspan="7">${t("sales.noCompletedSales")}</td></tr>
   `;
 
-  renderBarChart(document.querySelector(".revenue-chart") || document.querySelector(".bar-chart"), payload.revenue_chart, payload.has_revenue_chart, "value");
-  renderBarChart(document.querySelector(".profit-chart"), payload.profit_chart, payload.has_profit_chart, "value");
-  renderBarChart(document.querySelector(".stock-chart"), payload.stock_chart, payload.has_stock_chart, "value");
+  renderBarChart(document.querySelector(".revenue-chart") || document.querySelector(".bar-chart"), payload.revenue_chart, payload.has_revenue_chart, "value", true);
+  renderBarChart(document.querySelector(".profit-chart"), payload.profit_chart, payload.has_profit_chart, "value", true);
 
   renderSellerAnalytics(payload.analytics);
 }

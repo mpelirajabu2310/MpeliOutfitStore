@@ -27,7 +27,6 @@
   --sidebar-feature-bg: linear-gradient(180deg, rgba(201,162,78,.18), rgba(255,255,255,.04));
 
   --chart-bg: linear-gradient(180deg, #fbfaf6, #f1ede4);
-  --chart-bar: linear-gradient(180deg, #e8ca75, #15120d);
   --chart-line-bg: linear-gradient(180deg, #fff, #f2eee5);
   --chart-fill: rgba(201,162,78,.18);
 
@@ -81,7 +80,6 @@ body.dark {
   --overlay: rgba(0,0,0,.6);
 
   --chart-bg: linear-gradient(180deg, #211e1a, #1a1815);
-  --chart-bar: linear-gradient(180deg, #e8ca75, #6b5a2e);
   --chart-line-bg: linear-gradient(180deg, #211e1a, #1a1815);
   --chart-fill: rgba(201,162,78,.15);
 
@@ -993,7 +991,7 @@ input:focus, select:focus {
 .panel-title span { color: var(--text-secondary); font-size: 13px; }
 
 .bar-chart {
-  min-height: 250px;
+  min-height: 280px;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 14px;
@@ -1012,6 +1010,13 @@ input:focus, select:focus {
 .sales-chart-svg rect {
   fill: var(--gold);
   border-radius: 8px;
+}
+
+.sales-chart-svg .chart-day-label {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
 }
 
 .empty-state {

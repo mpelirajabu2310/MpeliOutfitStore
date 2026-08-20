@@ -76,8 +76,6 @@ class DashboardService extends BaseService
             [$profitChart, $profitTotal] = $this->sales->getProfitChartData();
         }
 
-        $stockChart = $this->inventory->getStockChartData();
-
         return [
             'role' => $isOwner ? 'OWNER' : 'SELLER',
             'currency' => 'TSH',
@@ -105,10 +103,8 @@ class DashboardService extends BaseService
             'recent_sales' => $recentSales,
             'revenue_chart' => $revenueChart,
             'profit_chart' => $profitChart,
-            'stock_chart' => $stockChart,
             'has_revenue_chart' => $revenueTotal > 0,
             'has_profit_chart' => $profitTotal > 0,
-            'has_stock_chart' => count($stockChart) > 0,
         ];
     }
 

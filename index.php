@@ -259,25 +259,11 @@ $timestamp = time();
               <p class="empty-state" data-i18n="dashboard.noChartData">No sales data available yet.</p>
             </div>
           </article>
-          <article class="panel owner-only">
-            <div class="panel-title">
-              <h3 data-i18n="dashboard.storeFloor">Overview</h3>
-            </div>
-            <p id="dashboardSummaryText" data-i18n="dashboard.storeFloorEmpty">Add products and record sales to see live performance here.</p>
-          </article>
           <article class="panel owner-only chart-panel">
             <div class="panel-title">
               <h3 data-i18n="dashboard.profitTrend">Profit Trend</h3>
             </div>
             <div class="bar-chart profit-chart">
-              <p class="empty-state" data-i18n="dashboard.noChartData">No sales data available yet.</p>
-            </div>
-          </article>
-          <article class="panel chart-panel">
-            <div class="panel-title">
-              <h3 data-i18n="dashboard.stockLevels">Stock Levels</h3>
-            </div>
-            <div class="bar-chart stock-chart">
               <p class="empty-state" data-i18n="dashboard.noChartData">No sales data available yet.</p>
             </div>
           </article>
