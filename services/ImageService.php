@@ -5,9 +5,9 @@ class ImageService
 {
     private array $config;
 
-    public function __construct()
+    public function __construct(?array $configOverride = null)
     {
-        $this->config = require __DIR__ . '/../config/uploads.php';
+        $this->config = $configOverride ?? require __DIR__ . '/../config/uploads.php';
     }
 
     public function processUploadedImage(array $file, int $productId): string

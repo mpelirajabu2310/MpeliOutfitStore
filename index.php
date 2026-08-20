@@ -764,22 +764,44 @@ $timestamp = time();
   <div class="modal-overlay hidden" id="promotionModal">
     <div class="modal-dialog" style="max-width:540px">
       <h3 id="promotionModalTitle" data-i18n="promotions.addNew">New promotion</h3>
-      <div class="promotion-fields">
-        <input id="promoNameInput" placeholder="Promotion name" data-i18n-placeholder="promotions.namePlaceholder" required />
-        <input id="promoDescriptionInput" placeholder="Description (optional)" data-i18n-placeholder="promotions.descPlaceholder" />
-        <label class="form-field"><span data-i18n="promotions.percentage">Discount %</span>
-          <input id="promoPercentageInput" type="number" min="1" max="100" step="1" required />
-        </label>
-        <div class="promo-date-row">
-          <label class="form-field"><span data-i18n="promotions.startDate">Start date</span><input id="promoStartDate" type="date" required /></label>
-          <label class="form-field"><span data-i18n="promotions.startTime">Start time (optional)</span><input id="promoStartTime" type="time" /></label>
-          <label class="form-field"><span data-i18n="promotions.endDate">End date</span><input id="promoEndDate" type="date" required /></label>
-          <label class="form-field"><span data-i18n="promotions.endTime">End time (optional)</span><input id="promoEndTime" type="time" /></label>
+      <div class="promo-form">
+        <div class="promo-image-section">
+          <div class="promo-image-preview" id="promoImagePreview">
+            <img id="promoCurrentImage" class="hidden" alt="" />
+            <div id="promoImagePlaceholder" class="promo-image-placeholder"><i class="bi bi-image"></i><span data-i18n="promotions.imageNoImage">No image</span></div>
+          </div>
+          <div class="promo-image-controls">
+            <input id="promoImageInput" type="file" accept="image/jpeg,image/png,image/jpg" data-i18n-aria-label="promotions.imageUpload" aria-label="Promotion image" />
+            <label class="form-hint"><input type="checkbox" id="promoRemoveImage" /> <span data-i18n="promotions.imageRemove">Remove image</span></label>
+            <small class="promo-image-hint" data-i18n="promotions.imageHelp">JPG, JPEG or PNG. Max 2 MB.</small>
+          </div>
         </div>
-        <label class="toggle-line"><input type="checkbox" id="promoAllProducts" /> <span data-i18n="promotions.allProducts">Apply to all products</span></label>
-        <div class="form-field" id="promoProductsField">
-          <span data-i18n="promotions.selectProducts">Select products</span>
-          <div class="promo-product-picker" id="promoProductPicker"></div>
+        <div class="promo-form-section">
+          <h4 class="promo-section-label" data-i18n="promotions.sectionInfo">Promotion Information</h4>
+          <div class="promo-form-fields">
+            <input id="promoNameInput" placeholder="Promotion name" data-i18n-placeholder="promotions.namePlaceholder" required />
+            <input id="promoDescriptionInput" placeholder="Description (optional)" data-i18n-placeholder="promotions.descPlaceholder" />
+            <label class="form-field"><span data-i18n="promotions.percentage">Discount %</span>
+              <input id="promoPercentageInput" type="number" min="1" max="100" step="1" required />
+            </label>
+          </div>
+        </div>
+        <div class="promo-form-section">
+          <h4 class="promo-section-label" data-i18n="promotions.sectionPeriod">Promotion Period</h4>
+          <div class="promo-date-row">
+            <label class="form-field"><span data-i18n="promotions.startDate">Start date</span><input id="promoStartDate" type="date" required /></label>
+            <label class="form-field"><span data-i18n="promotions.startTime">Start time (optional)</span><input id="promoStartTime" type="time" /></label>
+            <label class="form-field"><span data-i18n="promotions.endDate">End date</span><input id="promoEndDate" type="date" required /></label>
+            <label class="form-field"><span data-i18n="promotions.endTime">End time (optional)</span><input id="promoEndTime" type="time" /></label>
+          </div>
+        </div>
+        <div class="promo-form-section">
+          <h4 class="promo-section-label" data-i18n="promotions.sectionProducts">Products</h4>
+          <label class="toggle-line"><input type="checkbox" id="promoAllProducts" /> <span data-i18n="promotions.allProducts">Apply to all products</span></label>
+          <div class="form-field" id="promoProductsField">
+            <span data-i18n="promotions.selectProducts">Select products</span>
+            <div class="promo-product-picker" id="promoProductPicker"></div>
+          </div>
         </div>
       </div>
       <div class="modal-actions" style="margin-top:20px">
