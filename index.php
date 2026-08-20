@@ -293,13 +293,29 @@ $timestamp = time();
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th data-i18n="table.receipt">Receipt</th><th data-i18n="table.product">Product</th><th data-i18n="table.customerType">Customer Type</th><th data-i18n="table.amount">Amount</th><th class="owner-only" data-i18n="table.profit">Profit</th><th data-i18n="table.status">Status</th></tr></thead>
+              <thead><tr><th data-i18n="table.receipt">Receipt</th><th data-i18n="table.product">Product</th><th data-i18n="table.customerType">Customer Type</th><th data-i18n="table.amount">Amount</th><th class="owner-only" data-i18n="table.profit">Profit</th><th data-i18n="table.status">Status</th><th data-i18n="table.actions">Action</th></tr></thead>
               <tbody id="recentSalesBody">
-                <tr><td colspan="6" data-i18n="sales.noCompletedSales">No completed sales yet.</td></tr>
+                <tr><td colspan="7" data-i18n="sales.noCompletedSales">No completed sales yet.</td></tr>
               </tbody>
             </table>
           </div>
         </article>
+
+        <!-- Sale Details Modal -->
+        <div class="modal-overlay hidden" id="saleDetailsModal">
+          <div class="modal-dialog sale-details-dialog">
+            <div class="modal-head">
+              <h3 data-i18n="saleDetails.title">Sale Details</h3>
+              <button type="button" class="reset-close" id="saleDetailsClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div id="saleDetailsContent">
+              <div class="sale-details-loading">
+                <div class="sale-details-spinner"></div>
+                <p data-i18n="saleDetails.loading">Loading sale details...</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
       <main class="page" id="products">
         <div class="page-heading">

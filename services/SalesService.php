@@ -445,7 +445,7 @@ class SalesService extends BaseService
 
     public function getRecentSales(int $limit = 8, ?int $userId = null): array
     {
-        $sql = 'SELECT s.receipt_number, COALESCE(c.customer_type, "walk_in") AS customer_type,
+        $sql = 'SELECT s.id AS sale_id, s.receipt_number, COALESCE(c.customer_type, "walk_in") AS customer_type,
                        s.total_amount, s.total_profit, s.payment_status, s.sale_date, u.name AS seller_name
                 FROM sales s
                 LEFT JOIN customers c ON c.id = s.customer_id
@@ -460,6 +460,51 @@ class SalesService extends BaseService
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
+    }
+
+    public function getSaleDetails(int $saleId, ?int $userId = null): ?array
+    {
+        $sql = 'SELECT s.id AS sale_id, s.receipt_number, s.subtotal, s.discount_amount,
+                       s.bulk_discount_percent, s.total_amount, s.total_profit, s.payment_status,
+                       s.sale_date, u.name AS seller_name, s.sold_by,
+                       COALESCE(c.customer_type, "walk_in") AS customer_type
+                FROM sales s
+                JOIN users u ON u.id = s.sold_by
+                LEFT JOIN customers c ON c.id = s.customer_id
+                WHERE s.id = :sale_id AND s.payment_status = "paid"';
+        $params = ['sale_id' => $saleId];
+
+        if ($userId !== null) {
+            $sql .= ' AND s.sold_by = :user_id';
+            $params['user_id'] = $userId;
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $sale = $stmt->fetch();
+
+        if (!$sale) {
+            return null;
+        }
+
+        $itemsSql = 'SELECT si.id AS item_id, si.quantity, si.buying_price, si.selling_price,
+                            si.original_selling_price, si.discount_applied, si.pricing_type,
+                            si.bulk_discount_percent, si.line_total, si.line_profit,
+                            p.product_name,
+                            sz.label AS size_label,
+                            cl.name AS color_label
+                     FROM sale_items si
+                     JOIN product_variants pv ON pv.id = si.variant_id
+                     JOIN products p ON p.id = pv.product_id
+                     LEFT JOIN sizes sz ON sz.id = pv.size_id
+                     LEFT JOIN colors cl ON cl.id = pv.color_id
+                     WHERE si.sale_id = :sale_id
+                     ORDER BY si.id ASC';
+        $itemsStmt = $this->db->prepare($itemsSql);
+        $itemsStmt->execute(['sale_id' => $saleId]);
+        $sale['items'] = $itemsStmt->fetchAll();
+
+        return $sale;
     }
 
     public function getRevenueChartData(string $sellerFilter = '', array $params = []): array

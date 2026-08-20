@@ -872,10 +872,11 @@ async function loadDashboard(options = {}) {
       <td>${money(sale.total_amount)}</td>
       <td class="owner-only">${sale.total_profit === null ? t("role.hidden") : money(sale.total_profit)}</td>
       <td><span class="status paid">${t(`status.${sale.payment_status}`)}</span></td>
+      <td><button class="ghost-button sale-view-btn" data-sale-id="${sale.sale_id}"><i class="bi bi-eye"></i> ${t("saleDetails.view")}</button></td>
     </tr>
   `);
   document.querySelector("#recentSalesBody").innerHTML = rows.join("") || `
-    <tr><td colspan="6">${t("sales.noCompletedSales")}</td></tr>
+    <tr><td colspan="7">${t("sales.noCompletedSales")}</td></tr>
   `;
 
   renderBarChart(document.querySelector(".revenue-chart") || document.querySelector(".bar-chart"), payload.revenue_chart, payload.has_revenue_chart, "value");
@@ -900,6 +901,133 @@ function renderSellerAnalytics(analytics) {
   set("#analYearExpenses", p.year?.expenses);
   set("#analTotalSales", p.total?.sales);
   set("#analTotalExpenses", p.total?.expenses);
+}
+
+// ── Sale Details Modal ──────────────────────────────────────────────
+function closeSaleDetailsModal() {
+  document.querySelector("#saleDetailsModal")?.classList.add("hidden");
+}
+
+document.querySelector("#saleDetailsModal")?.addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeSaleDetailsModal();
+});
+
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".sale-view-btn");
+  if (!btn) return;
+  const saleId = btn.getAttribute("data-sale-id");
+  if (saleId) openSaleDetails(saleId);
+});
+
+async function openSaleDetails(saleId) {
+  const modal = document.querySelector("#saleDetailsModal");
+  const content = document.querySelector("#saleDetailsContent");
+  if (!modal || !content) return;
+
+  content.innerHTML = `<div class="sale-details-loading"><div class="sale-details-spinner"></div><p>${t("saleDetails.loading")}</p></div>`;
+  modal.classList.remove("hidden");
+
+  try {
+    const payload = await apiRequest(`api/sale_details.php?id=${encodeURIComponent(saleId)}`);
+    if (!payload.success || !payload.sale) {
+      content.innerHTML = `<div class="sale-details-error"><i class="bi bi-exclamation-triangle"></i><p>${escapeHtml(payload.message || t("saleDetails.error"))}</p></div>`;
+      return;
+    }
+    renderSaleDetailsContent(payload.sale);
+  } catch (err) {
+    const msg = err && err.message ? err.message : t("saleDetails.networkError");
+    content.innerHTML = `<div class="sale-details-error"><i class="bi bi-exclamation-triangle"></i><p>${escapeHtml(msg)}</p></div>`;
+  }
+}
+
+function renderSaleDetailsContent(sale) {
+  const content = document.querySelector("#saleDetailsContent");
+  if (!content) return;
+
+  const saleDate = new Date(sale.sale_date);
+  const dateStr = saleDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  const timeStr = saleDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+
+  let totalQuantity = 0;
+  let totalDiscount = 0;
+  const isOwner = currentUser && currentUser.role === "OWNER";
+
+  const itemsHtml = (sale.items || []).map((item, i) => {
+    const qty = parseInt(item.quantity, 10) || 0;
+    const unitPrice = parseFloat(item.selling_price) || 0;
+    const origPrice = parseFloat(item.original_selling_price) || unitPrice;
+    const discountPerUnit = origPrice > unitPrice ? origPrice - unitPrice : 0;
+    const lineDiscount = discountPerUnit * qty;
+    const lineTotal = parseFloat(item.line_total) || (unitPrice * qty);
+
+    totalQuantity += qty;
+    totalDiscount += lineDiscount;
+
+    const productName = escapeHtml(item.product_name);
+    const variantParts = [];
+    if (item.size_label) variantParts.push(escapeHtml(item.size_label));
+    if (item.color_label) variantParts.push(escapeHtml(item.color_label));
+    const variantStr = variantParts.length > 0 ? `<br><small class="sale-details-variant">${variantParts.join(" / ")}</small>` : "";
+
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${productName}${variantStr}</td>
+      <td>${qty}</td>
+      <td>${money(unitPrice)}</td>
+      <td>${lineDiscount > 0 ? money(lineDiscount) : "—"}</td>
+      <td>${money(lineTotal)}</td>
+    </tr>`;
+  }).join("");
+
+  const headerDiscount = parseFloat(sale.discount_amount) || totalDiscount;
+  const totalItems = sale.items ? sale.items.length : 0;
+
+  content.innerHTML = `
+    <div class="sale-details-header">
+      <div class="sale-details-receipt">${escapeHtml(sale.receipt_number)}</div>
+      <div class="sale-details-meta">
+        <span><i class="bi bi-calendar3"></i> ${dateStr}</span>
+        <span><i class="bi bi-clock"></i> ${timeStr}</span>
+        <span><i class="bi bi-person"></i> ${escapeHtml(sale.seller_name)}</span>
+      </div>
+    </div>
+    <div class="sale-details-table-wrap">
+      <table class="sale-details-table">
+        <thead><tr>
+          <th>#</th>
+          <th>${t("saleDetails.product")}</th>
+          <th>${t("saleDetails.qty")}</th>
+          <th>${t("saleDetails.unitPrice")}</th>
+          <th>${t("saleDetails.discount")}</th>
+          <th>${t("saleDetails.subtotal")}</th>
+        </tr></thead>
+        <tbody>${itemsHtml || `<tr><td colspan="6" class="sale-details-empty">${t("saleDetails.noItems")}</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div class="sale-details-summary">
+      <div class="sale-details-summary-row">
+        <span>${t("saleDetails.productTypes")}</span><span>${totalItems}</span>
+      </div>
+      <div class="sale-details-summary-row">
+        <span>${t("saleDetails.totalQuantity")}</span><span>${totalQuantity}</span>
+      </div>
+      ${headerDiscount > 0 ? `<div class="sale-details-summary-row">
+        <span>${t("saleDetails.totalDiscount")}</span><span>${money(headerDiscount)}</span>
+      </div>` : ""}
+      <div class="sale-details-summary-row sale-details-total">
+        <span>${t("saleDetails.totalPaid")}</span><span>${money(sale.total_amount)}</span>
+      </div>
+      ${isOwner ? `<div class="sale-details-summary-row sale-details-profit">
+        <span>${t("saleDetails.profit")}</span><span>${money(sale.total_profit)}</span>
+      </div>` : ""}
+    </div>
+    <div class="sale-details-footer">
+      <button type="button" class="ghost-button" id="saleDetailsCloseBtn">${t("common.close")}</button>
+    </div>
+  `;
+
+  document.querySelector("#saleDetailsCloseBtn")?.addEventListener("click", closeSaleDetailsModal);
+  document.querySelector("#saleDetailsClose")?.addEventListener("click", closeSaleDetailsModal);
 }
 
 async function loadReports(options = {}) {
