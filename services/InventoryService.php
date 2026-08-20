@@ -38,7 +38,7 @@ class InventoryService extends BaseService
             'SELECT pv.id AS variant_id, p.id AS product_id, pv.stock_quantity, p.buying_price, p.selling_price, p.minimum_allowed_selling_price
              FROM product_variants pv
              JOIN products p ON p.id = pv.product_id
-             WHERE pv.id = :variant_id AND p.status = "active"
+             WHERE pv.id = :variant_id AND p.status = \'active\'
              FOR UPDATE'
         );
         $stmt->execute(['variant_id' => $variantId]);
@@ -93,7 +93,7 @@ class InventoryService extends BaseService
             'SELECT COALESCE(SUM(pv.stock_quantity), 0)
              FROM product_variants pv
              JOIN products p ON p.id = pv.product_id
-             WHERE p.status = "active"'
+             WHERE p.status = \'active\''
         )->fetchColumn();
     }
 
@@ -151,7 +151,7 @@ class InventoryService extends BaseService
 
     public function getTotalActiveProducts(): int
     {
-        return (int)$this->db->query('SELECT COUNT(*) FROM products WHERE status = "active"')->fetchColumn();
+        return (int)$this->db->query("SELECT COUNT(*) FROM products WHERE status = 'active'")->fetchColumn();
     }
 
     /**

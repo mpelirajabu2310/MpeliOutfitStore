@@ -1,7 +1,9 @@
 let products = [];
 let currentUser = null;
 let translations = {};
-let currentLanguage = localStorage.getItem("preferredLanguage") || "en";
+let currentLanguage;
+try { currentLanguage = localStorage.getItem("preferredLanguage"); } catch (_) { currentLanguage = null; }
+currentLanguage = currentLanguage || "en";
 const cart = new Map();
 const discountPrices = new Map();
 let promotions = [];
@@ -147,11 +149,11 @@ document.addEventListener('DOMContentLoaded', () => {
 // Theme system
 const STORAGE_THEME_KEY = "preferredTheme";
 function getStoredTheme() {
-  return localStorage.getItem(STORAGE_THEME_KEY) || "light";
+  try { return localStorage.getItem(STORAGE_THEME_KEY) || "light"; } catch (_) { return "light"; }
 }
 function setTheme(theme) {
   document.body.classList.toggle("dark", theme === "dark");
-  localStorage.setItem(STORAGE_THEME_KEY, theme);
+  try { localStorage.setItem(STORAGE_THEME_KEY, theme); } catch (_) {}
   const btn = document.querySelector("#themeToggle");
   if (btn) btn.innerHTML = theme === "dark" ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-stars"></i>';
 }
@@ -167,18 +169,20 @@ const money = value => {
 };
 
 let lowStockThreshold = 5;
-let csrfToken = localStorage.getItem("csrf_token") || "";
+let csrfToken;
+try { csrfToken = localStorage.getItem("csrf_token"); } catch (_) { csrfToken = null; }
+csrfToken = csrfToken || "";
 
 function storeCsrfToken(token) {
   if (token) {
     csrfToken = token;
-    localStorage.setItem("csrf_token", token);
+    try { localStorage.setItem("csrf_token", token); } catch (_) {}
   }
 }
 
 function clearCsrfToken() {
   csrfToken = "";
-  localStorage.removeItem("csrf_token");
+  try { localStorage.removeItem("csrf_token"); } catch (_) {}
 }
 
 async function apiRequest(url, options = {}) {
@@ -244,7 +248,7 @@ async function loadTranslations(language) {
     if (!response.ok) throw new Error("Translation file not found.");
     translations = await response.json();
     currentLanguage = language;
-    localStorage.setItem("preferredLanguage", language);
+    try { localStorage.setItem("preferredLanguage", language); } catch (_) {}
   } catch (error) {
     if (language !== "en") {
       await loadTranslations("en");
@@ -765,7 +769,7 @@ function renderCart() {
 }
 
 function formatChartDay(day) {
-  const date = new Date(`${day}T00:00:00`);
+  const date = new Date(`${day}T00:00:00Z`);
   return Number.isNaN(date.getTime()) ? day : date.toLocaleDateString(undefined, { weekday: "short" });
 }
 
@@ -1686,7 +1690,7 @@ window.addEventListener("resize", () => {
     closeSidebar();
   }
   _lastViewportWidth = w;
-});
+}, { passive: true });
 
 // Prevent background scroll when a modal is open
 const _bodyScrollLockObserver = new MutationObserver(() => {
@@ -1727,7 +1731,7 @@ window.addEventListener("popstate", (e) => {
     history.replaceState({ page: "login" }, "", location.href);
     showLogin(true);
   }
-});
+}, { passive: true });
 
 function performSearch(query) {
   const q = query.trim().toLowerCase();
@@ -1780,7 +1784,7 @@ document.querySelector("#productForm")?.addEventListener("submit", async event =
   const stockInput = document.querySelector("#productStockInput").value;
 
   // Frontend duplicate check
-  const match = products.find(p => p.product_name?.toLowerCase() === name.toLowerCase());
+  const match = products.find(p => (p.name || p.product_name || "").toLowerCase() === name.toLowerCase());
   if (match) {
     const proceed = confirm(`Product "${name}" already exists with stock ${match.stock_quantity ?? 0}. Click OK to update stock, or Cancel to abort.`);
     if (!proceed) return;

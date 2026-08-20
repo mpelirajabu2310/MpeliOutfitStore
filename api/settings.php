@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
                  address = :address,
                  phone = :phone,
                  email = :email,
-                 currency_code = "TSH",
+                 currency_code = \'TSH\',
                  low_stock_threshold = :low_stock_threshold,
                  dark_mode_enabled = :dark_mode_enabled,
                  receipt_footer = :receipt_footer
@@ -87,10 +87,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         ]);
 
         $pdo->prepare(
-            'UPDATE product_variants pv
+            "UPDATE product_variants pv
              JOIN products p ON p.id = pv.product_id
              SET pv.reorder_level = :threshold
-             WHERE p.status = "active"'
+             WHERE p.status = 'active'"
         )->execute(['threshold' => $threshold]);
 
         $userSql = 'UPDATE users SET name = :name, email = :email';

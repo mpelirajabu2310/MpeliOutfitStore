@@ -30,7 +30,7 @@ if (!check_rate_limit('login', 5, 300)) {
 $stmt = $pdo->prepare(
     'SELECT id, name, username, email, password_hash, role, status
      FROM users
-     WHERE username = :username AND status = "active"
+     WHERE username = :username AND status = \'active\'
      LIMIT 1'
 );
 $stmt->execute(['username' => $username]);

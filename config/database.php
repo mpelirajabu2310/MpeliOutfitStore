@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+date_default_timezone_set('Africa/Dar_es_Salaam');
 
 function get_db(): PDO
 {

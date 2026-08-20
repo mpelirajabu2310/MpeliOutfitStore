@@ -104,6 +104,7 @@ body.dark {
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   color: var(--text);
   background: var(--bg);
   transition: color var(--theme-transition), background var(--theme-transition);
@@ -134,6 +135,7 @@ h1 { font-weight: 700; }
 
 .login-screen {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(280px, 1.1fr) minmax(260px, .9fr);
   background: var(--black);
@@ -451,14 +453,17 @@ input:focus, select:focus {
 
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: 280px 1fr;
 }
 
 .sidebar {
+  position: -webkit-sticky;
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   padding: 24px 18px;
   color: var(--white);
   background: var(--sidebar-bg);
@@ -466,6 +471,7 @@ input:focus, select:focus {
   flex-direction: column;
   gap: 26px;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(201,162,78,.35) transparent;
 }
@@ -564,6 +570,7 @@ input:focus, select:focus {
 }
 
 .topbar {
+  position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 3;
@@ -2072,10 +2079,6 @@ th {
     flex-basis: 100%;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .idle-ring-progress { transition: none; }
-  .idle-dialog { animation: none; }
-}
 
 /* Reset password dialog */
 .reset-dialog {
@@ -2279,6 +2282,7 @@ body.sidebar-open { overflow: hidden; }
   min-width: 0;
   max-height: 90vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-date-fields {
@@ -2368,14 +2372,7 @@ body.sidebar-open { overflow: hidden; }
 }
 
 /* Login card entrance animation */
-.login-card {
-  animation: loginCardIn .5s cubic-bezier(.4,0,.2,1) forwards;
-}
-
-@keyframes loginCardIn {
-  from { opacity: 0; transform: translateY(24px) scale(.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
+/* (duplicate .login-card / @keyframes loginCardIn removed – see line 245) */
 
 /* App shell entrance animation */
 .app-shell:not(.hidden) {
@@ -2630,6 +2627,7 @@ input:focus, select:focus, textarea:focus {
 /* Toast modern */
 .toast {
   border: none;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
 
@@ -2643,7 +2641,7 @@ img, video { max-width: 100%; height: auto; }
 .table-wrap::-webkit-scrollbar { height: 6px; }
 .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 input[type="date"] { min-height: 44px; }
-select { min-height: 44px; appearance: auto; }
+select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
 
 @media (max-width: 900px) {
   body { -webkit-text-size-adjust: 100%; }
@@ -3013,6 +3011,7 @@ select { min-height: 44px; appearance: auto; }
     padding: 24px 16px;
     background: var(--surface);
     min-height: 100vh;
+    min-height: 100dvh;
   }
   .login-panel::before { display: none; }
   .login-shop-name { display: block; }
@@ -3377,6 +3376,7 @@ select { min-height: 44px; appearance: auto; }
     min-width: 0;
     border-radius: 0;
     max-height: 100vh;
+    max-height: 100dvh;
     align-self: center;
   }
 
@@ -3391,6 +3391,7 @@ select { min-height: 44px; appearance: auto; }
   #saleDetailsContent {
     padding: 10px 14px;
     max-height: calc(100vh - 52px);
+    max-height: calc(100dvh - 52px);
   }
 
   .sale-details-table-wrap {

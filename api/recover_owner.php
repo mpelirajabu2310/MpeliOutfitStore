@@ -35,7 +35,7 @@ if ($action === 'verify') {
     }
 
     $stmt = $pdo->prepare(
-        'SELECT id, username, email FROM users WHERE username = :username AND email = :email AND status = "active" LIMIT 1'
+        'SELECT id, username, email FROM users WHERE username = :username AND email = :email AND status = \'active\' LIMIT 1'
     );
     $stmt->execute(['username' => $username, 'email' => $email]);
     $user = $stmt->fetch();

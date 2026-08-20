@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $stmt = $pdo->prepare(
             'INSERT INTO users (name, username, email, password_hash, role, status)
-             VALUES (:name, :username, :email, :password_hash, :role, "active")'
+             VALUES (:name, :username, :email, :password_hash, :role, \'active\')'
         );
         $stmt->execute([
             'name' => $name,
@@ -111,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     }
 
     if ($target['role'] === 'OWNER' && $role === 'SELLER') {
-        $ownerCount = (int)$pdo->query('SELECT COUNT(*) FROM users WHERE role = "OWNER" AND status = "active"')->fetchColumn();
+        $ownerCount = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role = 'OWNER' AND status = 'active'")->fetchColumn();
         if ($ownerCount <= 1) {
             respond(['success' => false, 'message' => 'At least one active OWNER account is required.'], 422);
         }

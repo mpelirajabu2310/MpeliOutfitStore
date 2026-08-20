@@ -88,7 +88,7 @@ class ProductService extends BaseService
 
     public function deleteProduct(int $id): void
     {
-        $stmt = $this->db->prepare('UPDATE products SET status = "inactive" WHERE id = :id');
+        $stmt = $this->db->prepare("UPDATE products SET status = 'inactive' WHERE id = :id");
         $stmt->execute(['id' => $id]);
     }
 
@@ -96,7 +96,7 @@ class ProductService extends BaseService
     {
         $stmt = $this->db->prepare(
             'SELECT p.id, p.product_name, p.image_path, p.buying_price, p.selling_price, p.minimum_allowed_selling_price, p.status
-             FROM products p WHERE p.id = :id AND p.status = "active" LIMIT 1'
+             FROM products p WHERE p.id = :id AND p.status = \'active\' LIMIT 1'
         );
         $stmt->execute(['id' => $id]);
         return $stmt->fetch() ?: null;
@@ -108,7 +108,7 @@ class ProductService extends BaseService
             'SELECT p.id, COALESCE(SUM(pv.stock_quantity), 0) AS current_stock
              FROM products p
              LEFT JOIN product_variants pv ON pv.product_id = p.id
-             WHERE LOWER(p.product_name) = LOWER(:name) AND p.status = "active"
+             WHERE LOWER(p.product_name) = LOWER(:name) AND p.status = \'active\'
              GROUP BY p.id LIMIT 1'
         );
         $stmt->execute(['name' => $name]);
@@ -130,7 +130,7 @@ class ProductService extends BaseService
                   COALESCE(MIN(pv.reorder_level), :threshold) AS reorder_level
                 FROM products p
                 LEFT JOIN product_variants pv ON pv.product_id = p.id
-                WHERE p.status = "active"';
+                WHERE p.status = \'active\'';
 
         $params = ['threshold' => $threshold];
         if ($search !== null && $search !== '') {

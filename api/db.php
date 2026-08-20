@@ -251,7 +251,7 @@ function current_user(PDO $pdo): ?array
     $stmt = $pdo->prepare(
         'SELECT id, name, username, email, role, status
          FROM users
-         WHERE id = :id AND status = "active"
+         WHERE id = :id AND status = \'active\'
          LIMIT 1'
     );
     $stmt->execute(['id' => $_SESSION['user_id']]);
@@ -293,7 +293,7 @@ function require_ownership(PDO $pdo, int $resourceUserId, ?array $user = null): 
 
 function owner_exists(PDO $pdo): bool
 {
-    return (int)$pdo->query('SELECT COUNT(*) FROM users WHERE role = "OWNER"')->fetchColumn() > 0;
+    return (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role = 'OWNER'")->fetchColumn() > 0;
 }
 
 function ensure_shop_settings(PDO $pdo): array
@@ -305,7 +305,7 @@ function ensure_shop_settings(PDO $pdo): array
 
     $pdo->exec(
         'INSERT INTO shop_settings (shop_name, currency_code, low_stock_threshold)
-         VALUES ("Mpeli Outfit Store", "TSH", 5)'
+         VALUES (\'Mpeli Outfit Store\', \'TSH\', 5)'
     );
 
     return $pdo->query('SELECT * FROM shop_settings ORDER BY id LIMIT 1')->fetch();

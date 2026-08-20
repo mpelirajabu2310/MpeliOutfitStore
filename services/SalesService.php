@@ -149,7 +149,7 @@ class SalesService extends BaseService
             // Insert sale
             $sStmt = $this->db->prepare(
                 'INSERT INTO sales (receipt_number, sold_by, subtotal, discount_amount, bulk_discount_percent, total_amount, total_profit, payment_status, idempotency_key)
-                 VALUES (:receipt_number, :sold_by, :subtotal, :discount_amount, :bulk_discount_percent, :total_amount, :total_profit, "paid", :idempotency_key)'
+                 VALUES (:receipt_number, :sold_by, :subtotal, :discount_amount, :bulk_discount_percent, :total_amount, :total_profit, \'paid\', :idempotency_key)'
             );
             try {
                 $sStmt->execute([
@@ -269,7 +269,7 @@ class SalesService extends BaseService
             'SELECT COALESCE(SUM(si.quantity), 0)
              FROM sale_items si
              JOIN sales s ON s.id = si.sale_id
-             WHERE s.payment_status = "paid"' . $this->userSql('s.sold_by', $userId) . $this->dateSql('s.sale_date', $startDate, $endDate)
+             WHERE s.payment_status = \'paid\'' . $this->userSql('s.sold_by', $userId) . $this->dateSql('s.sale_date', $startDate, $endDate)
         );
         $stmt->execute($this->userParams($userId, $this->dateParams($startDate, $endDate)));
         return (int)$stmt->fetchColumn();
@@ -298,7 +298,7 @@ class SalesService extends BaseService
             'SELECT COALESCE(SUM((si.original_selling_price - si.selling_price) * si.quantity), 0)
              FROM sale_items si
              JOIN sales s ON s.id = si.sale_id
-             WHERE s.payment_status = "paid"
+             WHERE s.payment_status = \'paid\'
              AND si.discount_applied = 1' . $this->userSql('s.sold_by', $userId) . $this->dateSql('s.sale_date', $startDate, $endDate)
         );
         $stmt->execute($this->userParams($userId, $this->dateParams($startDate, $endDate)));
@@ -311,14 +311,14 @@ class SalesService extends BaseService
     public function getSalesDetail(?int $userId = null, ?string $startDate = null, ?string $endDate = null, int $limit = 500): array
     {
         $sql = 'SELECT s.receipt_number,
-                       COALESCE(c.customer_type, "walk_in") AS customer_type,
+                       COALESCE(c.customer_type, \'walk_in\') AS customer_type,
                        s.total_amount, s.total_profit, s.sale_date,
                        u.name AS seller_name,
                        (SELECT COALESCE(SUM(si2.quantity), 0) FROM sale_items si2 WHERE si2.sale_id = s.id) AS items_sold
                 FROM sales s
                 LEFT JOIN customers c ON c.id = s.customer_id
                 JOIN users u ON u.id = s.sold_by
-                WHERE s.payment_status = "paid"'
+                WHERE s.payment_status = \'paid\''
                 . $this->userSql('s.sold_by', $userId)
                 . $this->dateSql('s.sale_date', $startDate, $endDate);
         $sql .= ' ORDER BY s.sale_date DESC LIMIT ' . max(1, min(2000, $limit));
@@ -339,7 +339,7 @@ class SalesService extends BaseService
                     COUNT(*) AS transactions,
                     COALESCE(SUM((SELECT COALESCE(SUM(si.quantity), 0) FROM sale_items si WHERE si.sale_id = s.id)), 0) AS items_sold
              FROM sales s
-             WHERE s.payment_status = "paid"'
+             WHERE s.payment_status = \'paid\''
              . $this->userSql('s.sold_by', $userId)
              . $this->dateSql('s.sale_date', $startDate, $endDate)
              . ' GROUP BY DATE(s.sale_date) ORDER BY sale_day'
@@ -361,7 +361,7 @@ class SalesService extends BaseService
                     COALESCE(SUM(s.total_profit), 0) AS profit
              FROM sales s
              JOIN users u ON u.id = s.sold_by
-             WHERE s.payment_status = "paid"' . $this->dateSql('s.sale_date', $startDate, $endDate)
+             WHERE s.payment_status = \'paid\'' . $this->dateSql('s.sale_date', $startDate, $endDate)
              . ' GROUP BY u.id, u.name ORDER BY revenue DESC'
         );
         $stmt->execute($this->dateParams($startDate, $endDate));
@@ -380,7 +380,7 @@ class SalesService extends BaseService
                     COUNT(s.id) AS transactions,
                     COALESCE(SUM(s.total_amount), 0) AS revenue
              FROM customers c
-             LEFT JOIN sales s ON s.customer_id = c.id AND s.payment_status = "paid"' . $this->dateSql('s.sale_date', $startDate, $endDate)
+             LEFT JOIN sales s ON s.customer_id = c.id AND s.payment_status = \'paid\'' . $this->dateSql('s.sale_date', $startDate, $endDate)
              . ' GROUP BY c.id, c.customer_type, c.full_name, c.phone ORDER BY revenue DESC LIMIT ' . max(1, min(1000, $limit))
         );
         $stmt->execute($this->dateParams($startDate, $endDate));
@@ -389,12 +389,12 @@ class SalesService extends BaseService
 
     public function getSalesHistory(?int $userId = null, int $limit = 100): array
     {
-        $sql = 'SELECT s.receipt_number, COALESCE(c.customer_type, "walk_in") AS customer_type,
+        $sql = 'SELECT s.receipt_number, COALESCE(c.customer_type, \'walk_in\') AS customer_type,
                        s.total_amount, s.total_profit, s.payment_status, s.sale_date, u.name AS seller_name
                 FROM sales s
                 LEFT JOIN customers c ON c.id = s.customer_id
                 JOIN users u ON u.id = s.sold_by
-                WHERE s.payment_status = "paid"';
+                WHERE s.payment_status = \'paid\'';
         $params = [];
         if ($userId !== null) {
             $sql .= ' AND s.sold_by = :user_id';
@@ -408,7 +408,7 @@ class SalesService extends BaseService
 
     public function getTotalSalesCount(?int $userId = null): int
     {
-        $sql = 'SELECT COUNT(*) FROM sales WHERE payment_status = "paid"';
+        $sql = 'SELECT COUNT(*) FROM sales WHERE payment_status = \'paid\'';
         $params = [];
         if ($userId !== null) {
             $sql .= ' AND sold_by = :user_id';
@@ -445,12 +445,12 @@ class SalesService extends BaseService
 
     public function getRecentSales(int $limit = 8, ?int $userId = null): array
     {
-        $sql = 'SELECT s.id AS sale_id, s.receipt_number, COALESCE(c.customer_type, "walk_in") AS customer_type,
+        $sql = 'SELECT s.id AS sale_id, s.receipt_number, COALESCE(c.customer_type, \'walk_in\') AS customer_type,
                        s.total_amount, s.total_profit, s.payment_status, s.sale_date, u.name AS seller_name
                 FROM sales s
                 LEFT JOIN customers c ON c.id = s.customer_id
                 JOIN users u ON u.id = s.sold_by
-                WHERE s.payment_status = "paid"';
+                WHERE s.payment_status = \'paid\'';
         $params = [];
         if ($userId !== null) {
             $sql .= ' AND s.sold_by = :user_id';
@@ -467,11 +467,11 @@ class SalesService extends BaseService
         $sql = 'SELECT s.id AS sale_id, s.receipt_number, s.subtotal, s.discount_amount,
                        s.bulk_discount_percent, s.total_amount, s.total_profit, s.payment_status,
                        s.sale_date, u.name AS seller_name, s.sold_by,
-                       COALESCE(c.customer_type, "walk_in") AS customer_type
+                       COALESCE(c.customer_type, \'walk_in\') AS customer_type
                 FROM sales s
                 JOIN users u ON u.id = s.sold_by
                 LEFT JOIN customers c ON c.id = s.customer_id
-                WHERE s.id = :sale_id AND s.payment_status = "paid"';
+                WHERE s.id = :sale_id AND s.payment_status = \'paid\'';
         $params = ['sale_id' => $saleId];
 
         if ($userId !== null) {
@@ -526,7 +526,7 @@ class SalesService extends BaseService
             $chart[date('Y-m', strtotime("-{$i} months"))] = 0.0;
         }
         $sql = 'SELECT DATE_FORMAT(sale_date, "%Y-%m") AS report_month, COALESCE(SUM(total_amount), 0) AS revenue
-                FROM sales WHERE payment_status = "paid"
+                FROM sales WHERE payment_status = \'paid\'
                 AND sale_date >= DATE_SUB(CURDATE(), INTERVAL 5 MONTH)' . $sellerFilter . '
                 GROUP BY DATE_FORMAT(sale_date, "%Y-%m") ORDER BY report_month';
         $stmt = $this->db->prepare($sql);
@@ -577,7 +577,7 @@ class SalesService extends BaseService
                  JOIN products p ON p.id = pv.product_id
                  JOIN categories c ON c.id = p.category_id
                  JOIN sales s ON s.id = si.sale_id
-                 WHERE s.payment_status = "paid" AND s.sold_by = :user_id
+                 WHERE s.payment_status = \'paid\' AND s.sold_by = :user_id
                  GROUP BY p.id, p.product_name, c.name
                  ORDER BY units_sold DESC LIMIT 8'
             );
@@ -607,7 +607,7 @@ class SalesService extends BaseService
     private function getPeriodAggregate(string $aggregate, ?int $userId = null, ?string $startDate = null, ?string $endDate = null): PDOStatement
     {
         $stmt = $this->db->prepare(
-            'SELECT ' . $aggregate . ' FROM sales WHERE payment_status = "paid"'
+            'SELECT ' . $aggregate . ' FROM sales WHERE payment_status = \'paid\''
             . $this->userSql('sold_by', $userId)
             . $this->dateSql('sale_date', $startDate, $endDate)
         );
@@ -661,7 +661,7 @@ class SalesService extends BaseService
             $days[date('Y-m-d', strtotime("-{$i} days"))] = 0.0;
         }
         $sql = "SELECT DATE(sale_date) AS sale_day, COALESCE(SUM({$valueColumn}), 0) AS value
-                FROM sales WHERE payment_status = \"paid\"
+                FROM sales WHERE payment_status = 'paid'
                 AND sale_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY){$sellerFilter}
                 GROUP BY DATE(sale_date) ORDER BY sale_day";
         $stmt = $this->db->prepare($sql);

@@ -174,7 +174,7 @@ class PromotionService extends BaseService
         $promos = $this->db->query(
             'SELECT id, name, percentage, all_products
              FROM promotions
-             WHERE status = "active"
+             WHERE status = \'active\'
                AND (start_date < CURDATE()
                     OR (start_date = CURDATE() AND (start_time IS NULL OR start_time <= CURTIME())))
                AND (end_date > CURDATE()
@@ -233,7 +233,7 @@ class PromotionService extends BaseService
         $stmt = $this->db->prepare(
             'SELECT p.id, p.name, p.percentage
              FROM promotions p
-             WHERE p.status = "active"
+             WHERE p.status = \'active\'
                AND (p.start_date < CURDATE()
                     OR (p.start_date = CURDATE() AND (p.start_time IS NULL OR p.start_time <= CURTIME())))
                AND (p.end_date > CURDATE()

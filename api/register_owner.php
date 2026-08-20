@@ -57,7 +57,7 @@ reset_rate_limit('register');
 try {
     $stmt = $pdo->prepare(
         'INSERT INTO users (name, username, email, password_hash, role, status)
-         VALUES (:name, :username, :email, :password_hash, "OWNER", "active")'
+         VALUES (:name, :username, :email, :password_hash, \'OWNER\', \'active\')'
     );
     $stmt->execute([
         'name' => $name,
