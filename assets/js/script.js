@@ -21,7 +21,6 @@ function saveCartState() {
     sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(Object.fromEntries(cart)));
     sessionStorage.setItem(DISCOUNT_STORAGE_KEY, JSON.stringify(Object.fromEntries(discountPrices)));
   } catch (e) {
-    console.warn("[cart] Unable to persist cart state:", e);
   }
 }
 
@@ -48,7 +47,6 @@ function restoreCartState() {
       });
     }
   } catch (e) {
-    console.warn("[cart] Unable to restore cart state:", e);
   }
 }
 
@@ -72,7 +70,6 @@ function clearCartState() {
     sessionStorage.removeItem(CART_STORAGE_KEY);
     sessionStorage.removeItem(DISCOUNT_STORAGE_KEY);
   } catch (e) {
-    console.warn("[cart] Unable to clear persisted cart state:", e);
   }
 }
 
@@ -83,7 +80,6 @@ function rememberPage(page) {
   try {
     sessionStorage.setItem("app.lastPage", page);
   } catch (e) {
-    console.warn("[nav] Unable to remember last page:", e);
   }
 }
 
@@ -100,7 +96,6 @@ function forgetLastPage() {
   try {
     sessionStorage.removeItem("app.lastPage");
   } catch (e) {
-    console.warn("[nav] Unable to forget last page:", e);
   }
 }
 
@@ -130,7 +125,6 @@ function escapeHtml(str) {
     if (loginScreen) loginScreen.classList.remove("hidden");
     if (appShell) appShell.classList.add("hidden");
   } catch (e) {
-    console.warn("Early state reset error:", e);
   }
 })();
 
@@ -215,7 +209,6 @@ async function apiRequest(url, options = {}) {
     try {
       payload = await response.json();
     } catch (jsonError) {
-      console.error("JSON parse error from", url, ":", jsonError);
       throw new Error("Invalid response from server. Please try again.");
     }
 
@@ -237,7 +230,6 @@ async function apiRequest(url, options = {}) {
     
     return payload;
   } catch (error) {
-    console.error("API request error:", error);
     throw error;
   }
 }
@@ -478,7 +470,6 @@ async function loadProducts() {
   const payload = await apiRequest(`api/products.php?${params.toString()}`);
   lowStockThreshold = payload.low_stock_threshold || 5;
   products = payload.products.map(normalizeProduct);
-  console.log(`[loadProducts] Loaded ${products.length} products`, products.map(p => ({ id: p.id, name: p.name, stock: p.stock })));
   restoreCartState();
   capCartToStock();
   saveCartState();
@@ -1281,12 +1272,10 @@ async function refreshAppData() {
   let errors = 0;
   results.forEach((r, i) => {
     if (r.status === "rejected") {
-      console.warn("refreshAppData: task", i, "failed", r.reason);
       errors++;
     }
   });
   if (errors > 0) {
-    console.warn(`refreshAppData: ${errors}/${tasks.length} tasks failed`);
   }
 }
 
@@ -1644,7 +1633,6 @@ document.querySelectorAll(".nav-item").forEach(button => {
       else if (page === "users" && isOwner()) await loadUsers();
       else if (page === "settings" && isOwner()) await loadSettings();
     } catch (e) {
-      console.warn(`[nav] ${page} data load failed:`, e);
     }
   });
 });
@@ -1703,7 +1691,6 @@ document.querySelector("#logoutButton")?.addEventListener("click", async () => {
   try {
     await apiRequest("api/logout.php", { method: "POST" });
   } catch (e) {
-    console.warn("Logout API call failed, clearing local state anyway:", e);
   }
   // Tell other open tabs the session has ended.
   idleStorageSet(SESSION_LOGGED_OUT_KEY, String(Date.now()));
@@ -2516,7 +2503,6 @@ async function loadMaintenanceStatus() {
       }
     }
   } catch (e) {
-    console.warn("[maintenance] Failed to load status:", e);
   }
 }
 
@@ -3098,14 +3084,12 @@ function startDashboardAutoRefresh() {
         // Background poll: must not count as user activity or reset the idle timer.
         await refreshFinancialData({ background: true });
       } catch (e) {
-        console.warn("Auto-refresh failed:", e);
       }
     }
   }, 30000);
 }
 
 async function init() {
-  console.log("[init] Starting app initialization...");
   try {
     await loadTranslations(currentLanguage);
     applyTranslations();
@@ -3120,14 +3104,12 @@ async function init() {
     try {
       mePayload = await apiRequest("api/me.php");
     } catch (error) {
-      console.error("[init] System health or auth check failed:", error);
       const healthChecks = [{ id: 'connection', label: 'Server Connection', severity: 'critical', detail: error.message || 'Could not reach the server.' }];
       showHealthScreen(healthChecks, false);
       return;
     }
 
     if (mePayload.healthy === false || mePayload.success === false) {
-      console.error("[init] System unhealthy:", mePayload.checks);
       showHealthScreen(mePayload.checks || [{ id: 'unknown', label: 'Unknown Error', severity: 'critical', detail: 'System check failed.' }], false);
       return;
     }
@@ -3136,7 +3118,6 @@ async function init() {
       const maintRole = mePayload.user?.role;
       const allowed = mePayload.maintenance.allowed_roles || ['OWNER'];
       if (maintRole && allowed.includes(maintRole)) {
-        console.log("[init] Maintenance mode — owner bypass allowed");
       } else {
         showMaintenanceScreen(mePayload.maintenance.message || 'System is under maintenance.');
         return;
@@ -3145,7 +3126,6 @@ async function init() {
 
     if (mePayload.authenticated && mePayload.user) {
       currentUser = mePayload.user;
-      console.log("[init] User authenticated as:", currentUser.name, "(" + currentUser.role + ")");
       showApp();
       await refreshAppData();
       const lastPage = getLastPage();
@@ -3156,11 +3136,9 @@ async function init() {
       startDashboardAutoRefresh();
     } else {
       const ownerExists = mePayload.owner_exists === true;
-      console.log("[init] Not authenticated, owner_exists:", ownerExists);
       showLogin(ownerExists);
     }
   } catch (error) {
-    console.error("[init] Initialization error:", error);
     showLogin(true);
   } finally {
     const splash = document.querySelector("#splashScreen");

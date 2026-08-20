@@ -1,24 +1,21 @@
 <?php
 declare(strict_types=1);
 
-// Suppress output of PHP notices/warnings that could break JSON
-error_reporting(E_ALL);
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
-// Global exception handler: ensures uncaught exceptions always return valid JSON
-set_exception_handler(function (Throwable $e) {
-    error_log('[uncaught] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    if (!headers_sent()) {
-        http_response_code(500);
-        header('Content-Type: application/json; charset=utf-8');
-    }
-    echo json_encode(['success' => false, 'message' => 'Internal server error.'], JSON_UNESCAPED_UNICODE);
+// Global exception handler — prevent stack traces in production
+set_exception_handler(static function (Throwable $e): void {
+    error_log('[FATAL] Uncaught exception: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => false, 'message' => 'An internal error occurred.'], JSON_THROW_ON_ERROR);
     exit;
 });
+
+// Prevent PHP from showing errors in the response
+ini_set('display_errors', '0');
+error_reporting(E_ERROR | E_PARSE);
 
 // ─── Session Configuration ──────────────────────────────────────────────────
 $sessionLifetime = 86400;
