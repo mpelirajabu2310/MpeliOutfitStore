@@ -20,13 +20,12 @@ class PromotionService extends BaseService
     {
         $payload = $this->validatePayload($data, true);
         $productIds = $this->validateProductIds($data['product_ids'] ?? [], (bool)$payload['all_products']);
-        $imagePath = !empty($data['image_path']) ? trim($data['image_path']) : null;
 
         $this->db->beginTransaction();
         try {
             $stmt = $this->db->prepare(
-                'INSERT INTO promotions (name, description, percentage, start_date, start_time, end_date, end_time, status, all_products, image_path, created_by)
-                 VALUES (:name, :description, :percentage, :start_date, :start_time, :end_date, :end_time, :status, :all_products, :image_path, :created_by)'
+                'INSERT INTO promotions (name, description, percentage, start_date, start_time, end_date, end_time, status, all_products, created_by)
+                 VALUES (:name, :description, :percentage, :start_date, :start_time, :end_date, :end_time, :status, :all_products, :created_by)'
             );
             $stmt->execute([
                 'name' => $payload['name'],
@@ -38,7 +37,6 @@ class PromotionService extends BaseService
                 'end_time' => $payload['end_time'],
                 'status' => 'draft',
                 'all_products' => (int)$payload['all_products'],
-                'image_path' => $imagePath,
                 'created_by' => $userId,
             ]);
             $promotionId = (int)$this->db->lastInsertId();
@@ -68,13 +66,11 @@ class PromotionService extends BaseService
 
         $this->db->beginTransaction();
         try {
-            $imagePath = array_key_exists('image_path', $data) ? ($data['image_path'] !== null ? trim($data['image_path']) : null) : $existing['image_path'];
             $stmt = $this->db->prepare(
                 'UPDATE promotions
                  SET name = :name, description = :description, percentage = :percentage,
                      start_date = :start_date, start_time = :start_time,
-                     end_date = :end_date, end_time = :end_time, all_products = :all_products,
-                     image_path = :image_path
+                     end_date = :end_date, end_time = :end_time, all_products = :all_products
                  WHERE id = :id'
             );
             $stmt->execute([
@@ -86,7 +82,6 @@ class PromotionService extends BaseService
                 'end_date' => $payload['end_date'],
                 'end_time' => $payload['end_time'],
                 'all_products' => (int)$payload['all_products'],
-                'image_path' => $imagePath,
                 'id' => $promotionId,
             ]);
 
@@ -127,27 +122,8 @@ class PromotionService extends BaseService
 
     public function deletePromotion(int $promotionId): void
     {
-        $imagePath = $this->getPromotionImage($promotionId);
         $stmt = $this->db->prepare('DELETE FROM promotions WHERE id = :id');
         $stmt->execute(['id' => $promotionId]);
-        if ($imagePath !== null) {
-            $imageService = new ImageService();
-            $imageService->removeImageFile($imagePath);
-        }
-    }
-
-    public function setPromotionImage(int $promotionId, ?string $imagePath): void
-    {
-        $stmt = $this->db->prepare('UPDATE promotions SET image_path = :image_path WHERE id = :id');
-        $stmt->execute(['image_path' => $imagePath, 'id' => $promotionId]);
-    }
-
-    public function getPromotionImage(int $promotionId): ?string
-    {
-        $stmt = $this->db->prepare('SELECT image_path FROM promotions WHERE id = :id');
-        $stmt->execute(['id' => $promotionId]);
-        $path = $stmt->fetchColumn();
-        return ($path !== false && $path !== null && $path !== '') ? (string)$path : null;
     }
 
     public function getPromotion(int $promotionId): ?array

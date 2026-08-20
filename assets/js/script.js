@@ -2093,15 +2093,11 @@ function renderPromotionsList() {
       <button type="button" class="ghost-button" data-promo-edit="${promo.id}" ${state === "active" ? "disabled" : ""}>${t("common.edit")}</button>
       <button type="button" class="ghost-button danger" data-promo-delete="${promo.id}">${t("common.delete")}</button>`;
     const dateRange = `${promo.start_date}${promo.start_time ? " " + promo.start_time : ""} → ${promo.end_date}${promo.end_time ? " " + promo.end_time : ""}`;
-    const promoImg = promo.image_path
-      ? `<div class="promo-card-img"><img src="${escapeHtml(promo.image_path + (promo.updated_at ? "?v=" + encodeURIComponent(promo.updated_at) : ""))}" alt="" loading="lazy" /></div>`
-      : "";
     return `<article class="promo-card">
       <div class="promo-card-head">
         <strong>${escapeHtml(promo.name)}</strong>
         <span class="promo-state ${state}">${promoEffectiveLabel(state)}</span>
       </div>
-      ${promoImg}
       ${promo.description ? `<p class="promo-desc">${escapeHtml(promo.description)}</p>` : ""}
       <div class="promo-meta">
         <span><i class="bi bi-tag-fill"></i> ${promo.percentage}%</span>
@@ -2127,25 +2123,6 @@ function openPromotionModal(promo) {
   document.querySelector("#promoProductsField").classList.toggle("hidden", allProducts);
   document.querySelector("#promotionModalTitle").textContent = promo ? t("promotions.edit") : t("promotions.addNew");
   loadPromotionProductOptions(promo ? (promo.product_ids || []) : []);
-
-  const imgEl = document.querySelector("#promoCurrentImage");
-  const placeholderEl = document.querySelector("#promoImagePlaceholder");
-  const fileInput = document.querySelector("#promoImageInput");
-  const removeCheck = document.querySelector("#promoRemoveImage");
-  if (fileInput) fileInput.value = "";
-  if (removeCheck) removeCheck.checked = false;
-
-  if (promo && promo.image_path) {
-    const imgUrl = promo.updated_at ? promo.image_path + "?v=" + encodeURIComponent(promo.updated_at) : promo.image_path;
-    imgEl.src = imgUrl;
-    imgEl.classList.remove("hidden");
-    placeholderEl.classList.add("hidden");
-  } else {
-    imgEl.src = "";
-    imgEl.classList.add("hidden");
-    placeholderEl.classList.remove("hidden");
-  }
-
   document.querySelector("#promotionModal").classList.remove("hidden");
 }
 
@@ -2169,20 +2146,6 @@ function closePromotionModal() {
   document.querySelector("#promotionModal")?.classList.add("hidden");
   editingPromotionId = null;
 }
-
-document.querySelector("#promoImageInput")?.addEventListener("change", event => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  const imgEl = document.querySelector("#promoCurrentImage");
-  const placeholderEl = document.querySelector("#promoImagePlaceholder");
-  const reader = new FileReader();
-  reader.onload = () => {
-    imgEl.src = reader.result;
-    imgEl.classList.remove("hidden");
-    placeholderEl.classList.add("hidden");
-  };
-  reader.readAsDataURL(file);
-});
 
 async function savePromotion() {
   const name = document.querySelector("#promoNameInput").value.trim();
@@ -2210,34 +2173,13 @@ async function savePromotion() {
     product_ids: productIds
   };
   try {
-    let promoId = editingPromotionId;
-    if (promoId) {
-      await apiRequest("api/promotions.php", { method: "PUT", body: JSON.stringify({ id: promoId, ...body }) });
+    if (editingPromotionId) {
+      await apiRequest("api/promotions.php", { method: "PUT", body: JSON.stringify({ id: editingPromotionId, ...body }) });
       showToast(t("promotions.updated"));
     } else {
-      const result = await apiRequest("api/promotions.php", { method: "POST", body: JSON.stringify(body) });
-      promoId = result.promotion_id;
+      await apiRequest("api/promotions.php", { method: "POST", body: JSON.stringify(body) });
       showToast(t("promotions.created"));
     }
-
-    const fileInput = document.querySelector("#promoImageInput");
-    const removeCheck = document.querySelector("#promoRemoveImage");
-    const hasNewFile = fileInput && fileInput.files && fileInput.files[0];
-
-    if (promoId && hasNewFile) {
-      const fd = new FormData();
-      fd.append("promotion_id", promoId);
-      fd.append("promotion_image", fileInput.files[0]);
-      await apiRequest("api/promotion_image.php", { method: "POST", body: fd });
-      showToast(t("promotions.imageUpdated"));
-    } else if (promoId && removeCheck && removeCheck.checked) {
-      await apiRequest("api/promotion_image.php", {
-        method: "POST",
-        body: JSON.stringify({ promotion_id: promoId, remove_image: true })
-      });
-      showToast(t("promotions.imageRemoved"));
-    }
-
     closePromotionModal();
     await loadPromotionsOwner();
     await loadPromotions();
