@@ -66,7 +66,7 @@ $timestamp = time();
       <div class="login-art-body">
         <img src="assets/images/logo.png" alt="logo" class="brand-mark">
         <div class="login-art-text">
-          <p class="eyebrow" data-i18n="brand.boutique">MPELI OUTFIT STORE</p>
+          <p class="eyebrow" data-i18n="brand.boutique">THURAIYA COLLECTION</p>
           <h1 data-i18n="login.heroTitle">Clothing shop management with a luxury retail rhythm.</h1>
           <p data-i18n="login.heroText">Track stock, sales, expenses, and profit from one calm internal dashboard.</p>
         </div>
