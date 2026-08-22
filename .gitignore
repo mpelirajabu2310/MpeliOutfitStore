@@ -10,6 +10,9 @@ _dev/
 # Environment
 .env
 
+# Local database configuration (never commit - production has its own)
+/config/database.php
+
 # Database (production only — use database/clothing_shop_management.sql)
 database/*.sql
 
