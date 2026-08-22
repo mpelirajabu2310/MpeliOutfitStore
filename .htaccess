@@ -68,3 +68,6 @@ php_value error_reporting -1
 
 # ─── Default Directory Index ─────────────────────────────────────────────────
 DirectoryIndex index.php
+
+# ─── Disable Directory Listing ───────────────────────────────────────────────
+Options -Indexes
