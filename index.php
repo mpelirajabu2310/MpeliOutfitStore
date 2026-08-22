@@ -110,7 +110,7 @@ $timestamp = time();
         <div class="login-logo-center">
           <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
         </div>
-        <p class="login-shop-name">Mpeli Outfit Store</p>
+        <p class="login-shop-name">Thuraiya Collection</p>
         <h2 data-i18n="auth.createOwner">Create owner account</h2>
         <p data-i18n="auth.createOwnerText">No owner exists yet. Create the first OWNER account to start using the system.</p>
         <label><span data-i18n="users.name">Name</span><div class="input-icon-wrap"><i class="bi bi-person-badge"></i><input type="text" id="ownerName" autocomplete="name" /></div></label>
