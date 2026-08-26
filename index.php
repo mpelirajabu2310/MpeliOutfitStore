@@ -86,7 +86,7 @@ $timestamp = time();
             <option value="sw">Swahili</option>
           </select>
         </label>
-        <h2 data-i18n="login.welcome">Welcome back</h2>
+        <h2 data-i18n="login.welcome">Welcome backuuuuu</h2>
         <p data-i18n="login.subtitle">Sign in to manage products, sales, inventory, and store reports.</p>
         <label>
           <span data-i18n="login.username">Username</span>
