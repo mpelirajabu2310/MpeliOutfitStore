@@ -87,7 +87,7 @@ $timestamp = time();
           </select>
         </label>
         <h2 data-i18n="login.welcome">Welcome back</h2>
-        <p data-i18n="login.subtitle">Sign in to manage products, sales, inventory, and store reports.</p>
+        <!-- <p data-i18n="login.subtitle">Sign in to manage products, sales, inventory, and store reports.</p> -->
         <label>
           <span data-i18n="login.username">Username</span>
           <div class="input-icon-wrap">
