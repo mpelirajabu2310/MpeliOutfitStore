@@ -1,4 +1,4 @@
 ---
 deployment:
   tasks:
-    - /bin/rsync -av --exclude='.git' --exclude='backups' --exclude='uploads' --exclude='.cpanel.yml' --exclude='_dev/' --exclude='database/' --exclude='README.md' --exclude='package.json' ./ /home/mpeljgto/public_html/
+    - /bin/rsync -av --exclude='.git' --exclude='backups' --exclude='uploads' --exclude='.cpanel.yml' --exclude='_dev/' --exclude='database/' --exclude='README.md' --exclude='package.json' --exclude='config/database.php' ./ /home/mpeljgto/public_html/
