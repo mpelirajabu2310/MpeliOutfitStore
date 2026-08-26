@@ -125,7 +125,7 @@ $timestamp = time();
   <div class="app-shell hidden" id="appShell">
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <aside class="sidebar">
-      <div class="sidebar-brand">
+      <div class="sidebar-brand" id="sidebarBrand" role="button" tabindex="0" aria-label="Go to dashboard">
         <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="sidebar-logo" />
         <span class="sidebar-title">Mpeli Outfit Store</span>
       </div>
@@ -151,13 +151,7 @@ $timestamp = time();
       <header class="topbar">
         <button class="menu-button" id="menuButton" aria-label="Toggle menu" data-i18n-aria-label="aria.toggleMenu"><i class="bi bi-list hamburger-icon" aria-hidden="true"></i></button>
 
-        <div class="topbar-left">
-          <img src="assets/images/logo.png" alt="Logo" class="topbar-logo" />
-          <strong class="topbar-store-name" id="topbarStoreName">Mpeli Outfit Store</strong>
-        </div>
-
         <div class="topbar-center">
-          <span class="topbar-page-title" id="topbarPageTitle" data-i18n="nav.dashboard">Dashboard</span>
           <div class="search-box topbar-search">
             <input type="search" placeholder="Search..." id="globalSearch" data-i18n-placeholder="search.globalPlaceholder" />
             <button type="button" class="search-icon-btn" id="searchIconBtn" aria-label="Search"><i class="bi bi-search"></i></button>

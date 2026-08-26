@@ -489,6 +489,20 @@ input:focus, select:focus {
   align-items: center;
   gap: 12px;
   text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+.sidebar-brand:hover {
+  transform: scale(1.02);
+  opacity: 0.88;
+}
+
+.sidebar-brand:active {
+  transform: scale(0.97);
+  opacity: 0.75;
 }
 
 .sidebar-logo {
@@ -584,45 +598,19 @@ input:focus, select:focus {
   border-bottom: 1px solid var(--border);
 }
 
-/* ── Topbar Left: Logo + Store Name ─────────────────────── */
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+/* Legacy selectors – kept hidden for safety */
+.topbar-left,
+.topbar-page-title {
+  display: none;
 }
 
-.topbar-logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  object-fit: contain;
-}
-
-.topbar-store-name {
-  font-family: var(--font-heading);
-  font-size: 15px;
-  font-weight: 700;
-  white-space: nowrap;
-  color: var(--text);
-}
-
-/* ── Topbar Center: Page Title + Search ─────────────────── */
+/* ── Topbar Center: Search + Controls ─────────────────── */
 .topbar-center {
   display: flex;
   align-items: center;
   gap: 16px;
   flex: 1;
   min-width: 0;
-}
-
-.topbar-page-title {
-  font-family: var(--font-heading);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .topbar-search {
@@ -2785,10 +2773,7 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
     z-index: 99;
   }
 
-  /* ── Row 1: hamburger | logo ... spacer ... avatar ──────── */
-  .topbar-left { order: 1; flex-shrink: 0; gap: 8px; }
-  .topbar-logo { width: 32px; height: 32px; }
-  .topbar-store-name { font-size: 13px; }
+  /* ── Row 1: hamburger ... spacer ... avatar ──────── */
 
   .menu-button {
     order: 0;
@@ -2805,7 +2790,7 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
     gap: 8px;
   }
 
-  /* ── Row 2: title | search | lang | theme ──────────────── */
+  /* ── Row 2: search | lang | theme ──────────────── */
   .topbar-center {
     order: 3;
     flex-basis: 100%;
@@ -2815,13 +2800,6 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid var(--border);
-  }
-
-  .topbar-page-title {
-    font-size: 14px;
-    flex-shrink: 0;
-    font-weight: 700;
-    color: var(--text);
   }
 
   .topbar-search { flex: 1; max-width: none; }
@@ -3036,16 +3014,11 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   /* Topbar row 1: even tighter */
   .topbar { padding: 8px 10px; gap: 0; }
 
-  .topbar-left { gap: 6px; }
-  .topbar-store-name { display: none; }
-  .topbar-logo { width: 30px; height: 30px; border-radius: 6px; }
-
   .menu-button { min-width: 36px; height: 36px; padding: 0 8px; margin-right: 6px; }
   .menu-button .hamburger-icon { font-size: 20px; }
 
   /* Topbar row 2: compact */
   .topbar-center { gap: 6px; margin-top: 6px; padding-top: 6px; }
-  .topbar-page-title { font-size: 13px; }
 
   .profile-avatar { width: 36px; height: 36px; font-size: 12px; }
 
@@ -3093,14 +3066,10 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
 @media (max-width: 360px) {
   .topbar { padding: 6px 8px; gap: 0; }
 
-  .topbar-left { gap: 4px; }
-  .topbar-logo { width: 26px; height: 26px; }
-
   .menu-button { min-width: 32px; height: 32px; padding: 0 6px; margin-right: 4px; }
   .menu-button .hamburger-icon { font-size: 18px; }
 
   .topbar-center { gap: 4px; margin-top: 4px; padding-top: 4px; }
-  .topbar-page-title { font-size: 12px; }
 
   .profile-avatar { width: 32px; height: 32px; font-size: 11px; }
 

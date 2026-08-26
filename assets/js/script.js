@@ -1647,6 +1647,10 @@ document.querySelector("#sidebarOverlay")?.addEventListener("click", () => {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeSidebar();
+  if ((e.key === "Enter" || e.key === " ") && e.target?.id === "sidebarBrand") {
+    e.preventDefault();
+    e.target.click();
+  }
 });
 
 function toggleSidebar() {
@@ -1669,6 +1673,26 @@ function closeSidebar() {
   overlay.classList.remove("active");
   document.body.classList.remove("sidebar-open");
 }
+
+// Sidebar brand / logo click → navigate to dashboard
+let _sidebarBrandBusy = false;
+document.querySelector("#sidebarBrand")?.addEventListener("click", async () => {
+  if (_sidebarBrandBusy) return;
+  _sidebarBrandBusy = true;
+  try {
+    document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    const dashBtn = document.querySelector('.nav-item[data-page="dashboard"]');
+    if (dashBtn) dashBtn.classList.add("active");
+    const dashPage = document.querySelector("#dashboard");
+    if (dashPage) dashPage.classList.add("active");
+    closeSidebar();
+    rememberPage("dashboard");
+    await loadDashboard();
+  } catch (_) { /* silent */ } finally {
+    _sidebarBrandBusy = false;
+  }
+});
 
 // Auto-close sidebar when viewport crosses the 900px breakpoint
 let _lastViewportWidth = window.innerWidth;
