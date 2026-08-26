@@ -1777,6 +1777,13 @@ document.querySelector("#productForm")?.addEventListener("submit", async event =
     if (!proceed) return;
   }
 
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalBtnHTML = submitBtn ? submitBtn.innerHTML : "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + (t("common.processing") || "Saving...");
+  }
+
   try {
     const formData = new FormData();
     formData.append("name", name);
@@ -1784,6 +1791,7 @@ document.querySelector("#productForm")?.addEventListener("submit", async event =
     formData.append("selling_price", document.querySelector("#productSellingInput").value);
     formData.append("minimum_allowed_selling_price", document.querySelector("#productMinPriceInput").value);
     formData.append("stock_quantity", stockInput);
+    formData.append("idempotency_key", crypto.randomUUID());
     const imageInput = document.querySelector("#productImageInput");
     if (imageInput && imageInput.files && imageInput.files[0]) {
       formData.append("product_image", imageInput.files[0]);
@@ -1802,6 +1810,11 @@ document.querySelector("#productForm")?.addEventListener("submit", async event =
     await refreshAppData();
   } catch (error) {
     showToast(error.message, "error");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalBtnHTML;
+    }
   }
 });
 
@@ -1914,10 +1927,10 @@ document.querySelector("#editImageInput")?.addEventListener("change", () => {
 document.querySelector("#editProductSave")?.addEventListener("click", async () => {
   if (!editingProductId) return;
   const btn = document.querySelector("#editProductSave");
-  const originalLabel = btn ? btn.textContent : "";
+  const originalBtnHTML = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
-    btn.textContent = t("common.processing");
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' + (t("common.processing") || "Saving...");
   }
 
   try {
@@ -1929,7 +1942,8 @@ document.querySelector("#editProductSave")?.addEventListener("click", async () =
         buying_price: document.querySelector("#editBuyingInput").value,
         selling_price: document.querySelector("#editSellingInput").value,
         minimum_allowed_selling_price: document.querySelector("#editMinPriceInput").value,
-        stock_quantity: document.querySelector("#editStockInput").value
+        stock_quantity: document.querySelector("#editStockInput").value,
+        idempotency_key: crypto.randomUUID()
       })
     });
 
@@ -1959,7 +1973,7 @@ document.querySelector("#editProductSave")?.addEventListener("click", async () =
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = originalLabel;
+      btn.innerHTML = originalBtnHTML;
     }
   }
 });

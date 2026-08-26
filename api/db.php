@@ -313,3 +313,62 @@ function low_stock_threshold(PDO $pdo): int
     $settings = ensure_shop_settings($pdo);
     return max(1, (int)($settings['low_stock_threshold'] ?? 5));
 }
+
+/**
+ * Check and claim an idempotency key to prevent duplicate submissions.
+ * Returns true if this is a new request (allowed to proceed).
+ * Returns false if the key was already processed (caller should return cached response).
+ * When returning false, the cached response is sent and the script exits.
+ */
+function check_idempotency(string $key): bool
+{
+    if ($key === '') {
+        return true;
+    }
+
+    $key = 'idem_' . preg_replace('/[^a-f0-9\-]/i', '', $key);
+    $now = time();
+    $ttl = 120;
+
+    if (!isset($_SESSION['_idempotency'])) {
+        $_SESSION['_idempotency'] = [];
+    }
+
+    // Purge expired entries
+    foreach ($_SESSION['_idempotency'] as $k => $entry) {
+        if ($entry['ts'] < $now - $ttl) {
+            unset($_SESSION['_idempotency'][$k]);
+        }
+    }
+
+    if (isset($_SESSION['_idempotency'][$key])) {
+        $cached = $_SESSION['_idempotency'][$key];
+        http_response_code($cached['status']);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($cached['body'], JSON_THROW_ON_ERROR);
+        exit;
+    }
+
+    $_SESSION['_idempotency'][$key] = ['ts' => $now];
+    return true;
+}
+
+/**
+ * Store the response for an idempotency key so duplicate requests return the same result.
+ */
+function store_idempotency_response(string $key, int $status, array $body): void
+{
+    if ($key === '') {
+        return;
+    }
+
+    $key = 'idem_' . preg_replace('/[^a-f0-9\-]/i', '', $key);
+    if (!isset($_SESSION['_idempotency'])) {
+        $_SESSION['_idempotency'] = [];
+    }
+    $_SESSION['_idempotency'][$key] = [
+        'ts'    => time(),
+        'status'=> $status,
+        'body'  => $body,
+    ];
+}
