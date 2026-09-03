@@ -400,7 +400,7 @@ class SalesService extends BaseService
             $sql .= ' AND s.sold_by = :user_id';
             $params['user_id'] = $userId;
         }
-        $sql .= ' ORDER BY s.sale_date DESC LIMIT ' . max(1, $limit);
+        $sql .= ' ORDER BY s.sale_date DESC LIMIT ' . max(1, min(500, $limit));
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
@@ -456,7 +456,7 @@ class SalesService extends BaseService
             $sql .= ' AND s.sold_by = :user_id';
             $params['user_id'] = $userId;
         }
-        $sql .= ' ORDER BY s.sale_date DESC LIMIT ' . max(1, $limit);
+        $sql .= ' ORDER BY s.sale_date DESC LIMIT ' . max(1, min(500, $limit));
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();

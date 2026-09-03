@@ -65,7 +65,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newStock = (int)$existing['current_stock'] + $stock;
         try {
             $productService->updateDuplicateProduct($existingId, $buying, $selling, $minPrice, $newStock, $threshold);
-            log_activity((int)$user['id'], 'product_stock_updated', "Product: {$name} (duplicate merge), Stock: {$newStock}");
+            audit_log((int)$user['id'], 'product_stock_updated', "Product: {$name} (duplicate merge), Stock: {$newStock}", 'success', [
+                'module' => 'products',
+                'description' => "Duplicate product merged: {$name}, stock updated to {$newStock}",
+                'entity_type' => 'product',
+                'entity_id' => $existingId,
+                'new_values' => ['buying_price' => $buying, 'selling_price' => $selling, 'stock_quantity' => $newStock],
+            ]);
             respond(['success' => true, 'message' => 'Product already exists. Stock updated successfully.', 'product_id' => $existingId, 'updated' => true], 200);
         } catch (Throwable $exception) {
             error_log('[products] update error: ' . $exception->getMessage());
@@ -93,7 +99,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($imageError !== null) {
             $payload['image_error'] = $imageError;
         }
-        log_activity((int)$user['id'], 'product_created', "Product: {$name}, ID: {$result['product_id']}");
+        audit_log((int)$user['id'], 'product_created', "Product: {$name}, ID: {$result['product_id']}", 'success', [
+            'module' => 'products',
+            'description' => "Product created: {$name}",
+            'entity_type' => 'product',
+            'entity_id' => (int)$result['product_id'],
+            'new_values' => [
+                'product_name' => $name,
+                'buying_price' => $buying,
+                'selling_price' => $selling,
+                'minimum_allowed_selling_price' => $minPrice,
+                'stock_quantity' => $stock,
+            ],
+        ]);
         respond($payload, 201);
     } catch (Throwable $exception) {
         error_log('[products] create error: ' . $exception->getMessage());
@@ -132,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     }
 
     try {
+        $oldProduct = $productService->getProductById($productId);
         $productService->updateProduct($productId, $name, $buying, $selling, $minPrice);
         if ($stock !== null) {
             $variantId = $productService->getFirstVariantId($productId);
@@ -139,7 +158,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
                 $productService->updateVariantStock($variantId, $stock, $threshold);
             }
         }
-        log_activity((int)$user['id'], 'product_updated', "Product ID: {$productId}, Name: {$name}");
+        $oldValues = $oldProduct ? [
+            'product_name' => $oldProduct['product_name'] ?? $oldProduct['name'] ?? '',
+            'buying_price' => (float)($oldProduct['buying_price'] ?? 0),
+            'selling_price' => (float)($oldProduct['selling_price'] ?? 0),
+            'minimum_allowed_selling_price' => (float)($oldProduct['minimum_allowed_selling_price'] ?? 0),
+        ] : null;
+        audit_log((int)$user['id'], 'product_updated', "Product ID: {$productId}, Name: {$name}", 'success', [
+            'module' => 'products',
+            'description' => "Product updated: {$name}",
+            'entity_type' => 'product',
+            'entity_id' => $productId,
+            'old_values' => $oldValues,
+            'new_values' => [
+                'product_name' => $name,
+                'buying_price' => $buying,
+                'selling_price' => $selling,
+                'minimum_allowed_selling_price' => $minPrice,
+            ],
+        ]);
         respond(['success' => true, 'message' => 'Product updated successfully.']);
     } catch (Throwable $exception) {
         error_log('[products] update error: ' . $exception->getMessage());
@@ -156,7 +193,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
         respond(['success' => false, 'message' => 'Product id is required.'], 422);
     }
     $productService->deleteProduct($productId);
-    log_activity((int)$user['id'], 'product_deleted', "Product ID: {$productId}");
+    audit_log((int)$user['id'], 'product_deleted', "Product ID: {$productId}", 'success', [
+        'module' => 'products',
+        'description' => "Product deleted (ID: {$productId})",
+        'entity_type' => 'product',
+        'entity_id' => $productId,
+    ]);
     respond(['success' => true, 'message' => 'Product deleted successfully.']);
 }
 

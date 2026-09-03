@@ -29,6 +29,46 @@ if (!$sale) {
     respond(['success' => false, 'message' => 'Sale not found or you do not have permission to view it.'], 404);
 }
 
+$paymentMethod = null;
+$pStmt = $pdo->prepare(
+    'SELECT payment_method FROM payments WHERE sale_id = :sale_id ORDER BY id ASC LIMIT 1'
+);
+$pStmt->execute(['sale_id' => $saleId]);
+$pRow = $pStmt->fetch();
+if ($pRow) {
+    $paymentMethod = $pRow['payment_method'];
+}
+$sale['payment_method'] = $paymentMethod;
+
+$customerName = null;
+$customerPhone = null;
+if (!empty($sale['customer_id'])) {
+    $cStmt = $pdo->prepare(
+        'SELECT full_name, phone FROM customers WHERE id = :cid LIMIT 1'
+    );
+    $cStmt->execute(['cid' => (int)$sale['customer_id']]);
+    $cRow = $cStmt->fetch();
+    if ($cRow) {
+        $customerName = $cRow['full_name'] ?: null;
+        $customerPhone = $cRow['phone'] ?: null;
+    }
+}
+$sale['customer_name'] = $customerName;
+$sale['customer_phone'] = $customerPhone;
+
+unset($sale['customer_id'], $sale['sold_by']);
+
+$settings = ensure_shop_settings($pdo);
+$sale['shop'] = [
+    'shop_name'     => $settings['shop_name'] ?? 'Mpeli Outfit Store',
+    'logo_url'      => $settings['logo_url'] ?? '',
+    'address'       => $settings['address'] ?? '',
+    'phone'         => $settings['phone'] ?? '',
+    'email'         => $settings['email'] ?? '',
+    'currency_code' => $settings['currency_code'] ?? 'TSH',
+    'receipt_footer' => $settings['receipt_footer'] ?? '',
+];
+
 respond([
     'success' => true,
     'sale' => $sale,

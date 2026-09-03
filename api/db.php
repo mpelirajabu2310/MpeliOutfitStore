@@ -55,7 +55,12 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) >
     session_destroy();
     session_start();
     if ($oldUserId) {
-        log_activity((int)$oldUserId, 'session_timeout', 'Session expired due to inactivity');
+        audit_log((int)$oldUserId, 'session_timeout', 'Session expired due to inactivity', 'warning', [
+            'module' => 'auth',
+            'description' => 'Session expired due to inactivity',
+            'entity_type' => 'user',
+            'entity_id' => (int)$oldUserId,
+        ]);
     }
 }
 
@@ -76,7 +81,7 @@ if (!headers_sent()) {
     header('X-XSS-Protection: 1; mode=block');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-    header('Content-Security-Policy: default-src \'self\'; script-src \'self\' \'unsafe-inline\' \'unsafe-eval\'; style-src \'self\' \'unsafe-inline\' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src \'self\' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src \'self\' data:; connect-src \'self\';');
+    header('Content-Security-Policy: default-src \'self\'; script-src \'self\' \'unsafe-inline\'; style-src \'self\' \'unsafe-inline\' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src \'self\' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src \'self\' data:; connect-src \'self\';');
 }
 
 require_once __DIR__ . '/../config/database.php';
@@ -122,19 +127,69 @@ function require_csrf(): void
 }
 
 // ─── IP-Based Rate Limiting (file-backed) ───────────────────────────────────
+// Client IP detection strategy (secure by default):
+//
+// The audit trail records whatever IP is actually visible to the server. On
+// plain shared hosting (e.g. this Namecheap/cPanel setup without a reverse
+// proxy) REMOTE_ADDR is the true public/client IP seen by the web server, and
+// forwarding headers like X-Forwarded-For can be *forged by any client*, so
+// they are NOT trusted unless a trusted proxy/CDN is explicitly enabled.
+//
+// When the site is placed behind a trusted reverse proxy or CDN (for example
+// Cloudflare, which sets CF-Connecting-IP / X-Forwarded-For), set the
+// TRUSTED_PROXY=1 environment variable in cPanel (or .env) so those headers
+// are honored. With TRUSTED_PROXY unset/0, the raw server-side address wins.
+//
+// Local development note: when requests come from the local machine
+// (127.0.0.1/::1) there is no real proxy, but XAMPP always sees the loopback
+// address, so for local testing only we fall back to the first valid
+// X-Forwarded-For entry. This never affects production because production
+// REMOTE_ADDR is a real public/client IP, never loopback.
 function get_client_ip(): string
 {
-    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-    if ($ip === '127.0.0.1' || $ip === '::1') {
+    $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+    $trustedProxy = (getenv('TRUSTED_PROXY') ?: '0') === '1';
+    $isLoopback = $remoteAddr === '127.0.0.1' || $remoteAddr === '::1';
+
+    // 1) Explicitly configured trusted proxy / CDN (e.g. Cloudflare).
+    if ($trustedProxy) {
+        foreach (['CF_CONNECTING_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR'] as $header) {
+            $value = $_SERVER[$header] ?? '';
+            if ($value === '') continue;
+            $candidate = trim(explode(',', $value)[0]);
+            $candidate = filter_var($candidate, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+            if ($candidate !== false) {
+                // Strip IPv4-mapped IPv6 (::ffff:1.2.3.4) for readability.
+                if (str_starts_with($candidate, '::ffff:')) $candidate = substr($candidate, 7);
+                return $candidate;
+            }
+        }
+    }
+
+    // 2) Local/development fallback only — allows a browser dev setup where the
+    //    load balancer or a local proxy (e.g. Apache) is the only hop.
+    if ($isLoopback) {
         $xff = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
         if ($xff !== '') {
             $firstIp = trim(explode(',', $xff)[0]);
-            if (filter_var($firstIp, FILTER_VALIDATE_IP)) {
+            if (filter_var($firstIp, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                 return $firstIp;
             }
         }
     }
-    return $ip;
+
+    // 3) Default and correct behavior: the actual address the server received.
+    if ($remoteAddr !== '') {
+        if (filter_var($remoteAddr, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            if (str_starts_with($remoteAddr, '::ffff:')) return substr($remoteAddr, 7);
+            return $remoteAddr;
+        }
+        // Loopback or NAT ranges are still valid client addresses in some
+        // setups — record them rather than inventing something.
+        return $remoteAddr;
+    }
+
+    return '0.0.0.0';
 }
 
 function _rate_limit_dir(): string
@@ -201,6 +256,148 @@ function log_activity(int $userId, string $event, string $details = '', string $
         @mkdir($logDir, 0750, true);
     }
     @file_put_contents($logDir . '/activity.log', $logLine, FILE_APPEND | LOCK_EX);
+}
+
+/**
+ * Write an entry to the audit_logs database table.
+ * Called by the new audit_log() convenience function below.
+ * Extracts authenticated user info server-side from the session/user lookup.
+ */
+function _write_audit_db(
+    ?int    $userId,
+    string $action,
+    string $module,
+    string $description = '',
+    ?string $entityType = null,
+    ?int    $entityId   = null,
+    ?array  $oldValues  = null,
+    ?array  $newValues  = null
+): void {
+    try {
+        global $pdo;
+        if (!($pdo instanceof PDO)) {
+            return;
+        }
+
+        // Do not insert if the table doesn't exist yet
+        static $tableExists = null;
+        if ($tableExists === null) {
+            $check = $pdo->query("SHOW TABLES LIKE 'audit_logs'");
+            $tableExists = $check && $check->rowCount() > 0;
+        }
+        if (!$tableExists) {
+            return;
+        }
+
+        // Prefer the explicitly-passed user id; fall back to session when available
+        $userId = $userId ?? ($_SESSION['user_id'] ?? 0);
+        $userName = '';
+        $userRole = $_SESSION['user_role'] ?? '';
+        $ip       = get_client_ip();
+        $agent    = $_SERVER['HTTP_USER_AGENT'] ?? '';
+
+        if ($userId > 0) {
+            $uStmt = $pdo->prepare('SELECT id, name, role FROM users WHERE id = :id LIMIT 1');
+            $uStmt->execute(['id' => $userId]);
+            $uRow = $uStmt->fetch();
+            if ($uRow) {
+                $userName = $uRow['name'];
+                $userRole = $uRow['role'];
+            }
+        }
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO audit_logs
+                (user_id, user_name, user_role, action, module, description,
+                 entity_type, entity_id, old_values, new_values, ip_address, user_agent)
+             VALUES
+                (:user_id, :user_name, :user_role, :action, :module, :description,
+                 :entity_type, :entity_id, :old_values, :new_values, :ip_address, :user_agent)'
+        );
+        $stmt->execute([
+            'user_id'     => $userId > 0 ? $userId : null,
+            'user_name'   => $userName !== '' ? $userName : null,
+            'user_role'   => $userRole !== '' ? $userRole : null,
+            'action'      => $action,
+            'module'      => $module,
+            'description' => $description !== '' ? $description : null,
+            'entity_type' => $entityType,
+            'entity_id'   => $entityId,
+            'old_values'  => $oldValues !== null ? json_encode($oldValues, JSON_UNESCAPED_UNICODE) : null,
+            'new_values'  => $newValues !== null ? json_encode($newValues, JSON_UNESCAPED_UNICODE) : null,
+            'ip_address'  => $ip,
+            'user_agent'  => mb_substr($agent, 0, 512),
+        ]);
+    } catch (\Throwable $e) {
+        error_log('[audit_db] write failed: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Convenience: log an action to both the file-based activity log AND
+ * the database audit_logs table.
+ *
+ * The optional $auditParams array supports:
+ *   'module'       => string (required)
+ *   'description'  => string
+ *   'entity_type'  => string
+ *   'entity_id'    => int
+ *   'old_values'   => array
+ *   'new_values'   => array
+ */
+function audit_log(
+    int    $userId,
+    string $action,
+    string $details = '',
+    string $status  = 'success',
+    array  $auditParams = []
+): void {
+    // 1. Always write to the file-based log (backwards compatible)
+    log_activity($userId, $action, $details, $status);
+
+    // 2. Also write to the database audit_logs table
+    $module = $auditParams['module'] ?? _infer_module_from_action($action);
+    _write_audit_db(
+        userId:      $userId,
+        action:      $action,
+        module:      $module,
+        description: $auditParams['description'] ?? $details,
+        entityType:  $auditParams['entity_type'] ?? null,
+        entityId:    $auditParams['entity_id'] ?? null,
+        oldValues:   $auditParams['old_values'] ?? null,
+        newValues:   $auditParams['new_values'] ?? null,
+    );
+}
+
+/**
+ * Infer the module from the action name prefix.
+ */
+function _infer_module_from_action(string $action): string
+{
+    $prefixes = [
+        'product'     => 'products',
+        'sale'        => 'sales',
+        'expense'     => 'expenses',
+        'promotion'   => 'promotions',
+        'user'        => 'users',
+        'login'       => 'auth',
+        'logout'      => 'auth',
+        'session'     => 'auth',
+        'password'    => 'auth',
+        'recovery'    => 'auth',
+        'owner'       => 'auth',
+        'report'      => 'reports',
+        'settings'    => 'settings',
+        'maintenance' => 'system',
+        'backup'      => 'system',
+        'inventory'   => 'inventory',
+    ];
+    foreach ($prefixes as $prefix => $module) {
+        if (str_starts_with($action, $prefix)) {
+            return $module;
+        }
+    }
+    return 'system';
 }
 
 // ─── Core Auth Helpers ──────────────────────────────────────────────────────

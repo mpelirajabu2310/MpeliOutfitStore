@@ -27,7 +27,12 @@ $stmt->execute(['id' => $user['id']]);
 $record = $stmt->fetch();
 
 if (!$record || !password_verify($currentPassword, (string)$record['password_hash'])) {
-    log_activity((int)$user['id'], 'password_change_failed', 'Current password incorrect', 'failure');
+    audit_log((int)$user['id'], 'password_change_failed', 'Current password incorrect', 'failure', [
+        'module' => 'auth',
+        'description' => 'Password change failed: incorrect current password',
+        'entity_type' => 'user',
+        'entity_id' => $user['id'],
+    ]);
     respond(['success' => false, 'message' => 'Current password is incorrect.'], 401);
 }
 
@@ -54,7 +59,12 @@ $update->execute([
 // Regenerate session after password change
 session_regenerate_id(true);
 
-log_activity((int)$user['id'], 'password_changed');
+audit_log((int)$user['id'], 'password_changed', 'Password changed successfully', 'success', [
+    'module' => 'auth',
+    'description' => 'User changed their password',
+    'entity_type' => 'user',
+    'entity_id' => $user['id'],
+]);
 
 respond([
     'success' => true,

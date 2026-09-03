@@ -30,7 +30,10 @@ if ($action === 'verify') {
     // Rate limit: 5 verify attempts per 5 minutes
     if (!check_rate_limit('recovery_verify', 5, 300)) {
         $ip = get_client_ip();
-        log_activity(0, 'recovery_verify_blocked', "IP: $ip — too many verify attempts", 'blocked');
+        audit_log(0, 'recovery_verify_blocked', "IP: $ip — too many verify attempts", 'blocked', [
+            'module' => 'auth',
+            'description' => "IP: {$ip} blocked due to too many recovery verify attempts",
+        ]);
         respond(['success' => false, 'message' => 'Too many attempts. Try again in 5 minutes.'], 429);
     }
 
@@ -41,7 +44,10 @@ if ($action === 'verify') {
     $user = $stmt->fetch();
 
     if (!$user) {
-        log_activity(0, 'recovery_verify_failed', "Username: $username, Email: $email", 'failure');
+        audit_log(0, 'recovery_verify_failed', "Username: $username, Email: $email", 'failure', [
+            'module' => 'auth',
+            'description' => "Recovery verify failed for username: {$username}",
+        ]);
         respond(['success' => false, 'message' => 'No account found with that username and email.'], 404);
     }
 
@@ -52,7 +58,12 @@ if ($action === 'verify') {
     $_SESSION['recovery_token_time'] = time();
 
     reset_rate_limit('recovery_verify');
-    log_activity((int)$user['id'], 'recovery_verified', "Username: $username");
+    audit_log((int)$user['id'], 'recovery_verified', "Username: $username", 'success', [
+        'module' => 'auth',
+        'description' => "Recovery identity verified for: {$username}",
+        'entity_type' => 'user',
+        'entity_id' => (int)$user['id'],
+    ]);
 
     respond([
         'success' => true,
@@ -127,16 +138,20 @@ if ($action === 'reset') {
     // Clear recovery session data
     unset($_SESSION['recovery_token'], $_SESSION['recovery_user_id'], $_SESSION['recovery_token_time']);
 
-    // Clear rate limits for this user
-    $rlDir = __DIR__ . '/../logs/ratelimit';
-    if (is_dir($rlDir)) {
-        $files = glob($rlDir . '/*.json');
-        foreach ($files as $f) {
-            @unlink($f);
-        }
-    }
+    // Clear rate limits for this client IP (scoped — do NOT wipe the whole
+    // rate-limit directory, which would reset every user/IP's counters and
+    // defeat brute-force protection for everyone.)
+    reset_rate_limit('recovery_verify');
+    reset_rate_limit('recovery_reset');
+    reset_rate_limit('login');
+    reset_rate_limit('register');
 
-    log_activity($userId, 'recovery_password_reset', "Password reset via recovery");
+    audit_log($userId, 'recovery_password_reset', 'Password reset via recovery', 'success', [
+        'module' => 'auth',
+        'description' => 'Password reset via account recovery',
+        'entity_type' => 'user',
+        'entity_id' => $userId,
+    ]);
 
     respond([
         'success' => true,

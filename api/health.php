@@ -10,6 +10,9 @@ try {
     $healthService = new SystemHealthService();
     $result = $healthService->runFullStartupCheck();
 
+    // Do not expose the server PHP version to unauthenticated clients.
+    unset($result['php_version']);
+
     http_response_code($result['healthy'] ? 200 : 503);
     echo json_encode($result, JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
@@ -24,6 +27,5 @@ try {
             'detail' => 'A critical error occurred during health check.',
         ]],
         'timestamp' => date('Y-m-d H:i:s'),
-        'php_version' => PHP_VERSION,
     ], JSON_UNESCAPED_UNICODE);
 }

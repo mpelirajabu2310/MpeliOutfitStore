@@ -242,6 +242,87 @@ The interface supports **English** and **Swahili**. Selected language is saved i
 
 ---
 
+## Backup & Recovery
+
+The application ships with a professional backup module for database, file, and full backups, with automatic retention and a server-side concurrency lock. Only the **OWNER** can manage backups.
+
+### Storage Location
+
+`services/BackupService.php` resolves the backup directory as follows:
+
+| Environment | Backup directory |
+|-------------|------------------|
+| cPanel (production) | `/home/<cpanel_user>/backups` — **outside** `public_html` (recommended) |
+| Local XAMPP | `C:\xampp\htdocs\backups` — outside the app root |
+
+If the outside-root directory is not writable, the service falls back to `<app_root>/backups/` (protected by a `.htaccess` with `Require all denied`). You can override the directory with the `BACKUP_DIR` environment variable.
+
+### Backup Types & Filenames
+
+| Type | Format | Contents |
+|------|--------|----------|
+| Database | `mpelioutfitstore_db_YYYY-MM-DD_HH-mm-ss.sql.gz` | Full SQL dump, gzip-compressed |
+| Files | `mpelioutfitstore_files_*.tar.gz` | Uploaded product images, etc. |
+| Full | `mpelioutfitstore_full_*.tar.gz` | Database + files combined |
+
+Database dumps are produced by PHP PDO streaming (no special server binaries required). If `mysqldump` is available and `MYSQLDUMP_PATH` is set, it will be preferred.
+
+### Manual Backup (Web UI)
+
+1. Log in as **OWNER**.
+2. Open **Backup** from the navigation.
+3. Use **Create Database Backup**, **Create File Backup**, or **Create Full Backup**.
+4. Backups appear in the history table. Use **Download**, **Validate**, or **Delete**.
+5. Set the retention policy (daily/weekly/monthly/full) in the retention form.
+6. **Restore** requires a two-step confirmation: a safety backup is created automatically *before* the restore is applied, and only database backups can be restored.
+
+### Scheduled Backups (cPanel Cron)
+
+A stand-alone runner is included at `backups/cron_backup.php`. It authenticates through the same `config/database.php` environment variables (no credentials are embedded) and works whether placed in `public_html` or outside it. Copy it to the server's backup directory (e.g. `/home/<user>/backups/cron_backup.php`) and add cron jobs in **cPanel → Cron Jobs**:
+
+```
+# Daily database backup (02:15)
+15 2 * * * APP_ROOT=/home/<user>/public_html /usr/local/bin/php /home/<user>/backups/cron_backup.php daily
+
+# Weekly full backup — Sunday 03:15
+15 3 * * 0 APP_ROOT=/home/<user>/public_html /usr/local/bin/php /home/<user>/backups/cron_backup.php weekly
+
+# Monthly long-term database backup — 1st of month 04:15
+15 4 1 * * APP_ROOT=/home/<user>/public_html /usr/local/bin/php /home/<user>/backups/cron_backup.php monthly
+```
+
+> Replace `<user>` with your cPanel username. If `APP_ROOT` is omitted, the script walks up from its own location looking for `config/database.php`. Each scheduled run also applies the retention policy. Logs are written to `<app_root>/logs/backup.log`. Set `BACKUP_ENABLED=0` to disable backup creation entirely.
+
+### Migration
+
+The `backup_settings` table (which stores the retention policy) is created on first use by the service. To pre-create it explicitly, run:
+
+```
+mysql -u <user> -p clothing_shop_management < _dev/migrations/2026-09-01-create-backup-settings.sql
+```
+
+### Recovery
+
+To restore the database to a specific backup:
+
+1. As OWNER, open **Backup**.
+2. Click **Restore** on the chosen database backup.
+3. Confirm in the dialog. The system creates a `pre_restore` safety backup, then applies the dump. Default shop settings are re-seeded automatically if emptied.
+
+For a manual restore, decompress the `.sql.gz` and import via phpMyAdmin, or:
+
+```
+gunzip -c mpelioutfitstore_db_2026-09-01_02-15-00.sql.gz | mysql -u <user> -p clothing_shop_management
+```
+
+### Security Notes
+
+- Backup file names are strictly whitelisted (path traversal is blocked server-side via `safePath()`).
+- Downloads stream with `Cache-Control: no-store` and are restricted to OWNER.
+- A server-side lock file prevents concurrent/duplicate backups (stale locks time out automatically).
+
+---
+
 ## Common Errors & Solutions
 
 | Error | Solution |

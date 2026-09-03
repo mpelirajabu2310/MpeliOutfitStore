@@ -112,6 +112,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $userStmt = $pdo->prepare($userSql);
         $userStmt->execute($userParams);
 
+        $oldSettings = $settings;
+        $newSettings = [
+            'shop_name' => $shopName,
+            'address' => $address,
+            'phone' => $phone,
+            'email' => $email,
+            'low_stock_threshold' => $threshold,
+            'dark_mode_enabled' => $darkMode ? 1 : 0,
+            'receipt_footer' => $receiptFooter,
+        ];
+        audit_log((int)$owner['id'], 'settings_updated', 'Shop settings updated', 'success', [
+            'module' => 'settings',
+            'description' => 'System settings updated',
+            'entity_type' => 'settings',
+            'entity_id' => $settingsId,
+            'old_values' => [
+                'shop_name' => $oldSettings['shop_name'] ?? '',
+                'address' => $oldSettings['address'] ?? '',
+                'phone' => $oldSettings['phone'] ?? '',
+                'low_stock_threshold' => $oldSettings['low_stock_threshold'] ?? '',
+                'dark_mode_enabled' => (bool)($oldSettings['dark_mode_enabled'] ?? false),
+                'receipt_footer' => $oldSettings['receipt_footer'] ?? '',
+            ],
+            'new_values' => $newSettings,
+        ]);
+
         $pdo->commit();
         respond(['success' => true, 'message' => 'Settings saved successfully.']);
     } catch (Throwable $exception) {

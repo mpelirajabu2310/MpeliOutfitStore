@@ -63,7 +63,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         $newUserId = (int)$pdo->lastInsertId();
-        log_activity((int)$owner['id'], 'user_created', "Created user: $username (role: $role, id: $newUserId)");
+        audit_log((int)$owner['id'], 'user_created', "Created user: $username (role: $role, id: $newUserId)", 'success', [
+            'module' => 'users',
+            'description' => "User account created: {$name} ({$username}, role: {$role})",
+            'entity_type' => 'user',
+            'entity_id' => $newUserId,
+            'new_values' => ['name' => $name, 'username' => $username, 'email' => $email, 'role' => $role, 'status' => 'active'],
+        ]);
 
         respond(['success' => true, 'message' => 'User created successfully.'], 201);
     } catch (PDOException $e) {
@@ -106,6 +112,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         respond(['success' => false, 'message' => 'User not found.'], 404);
     }
 
+    $oldUserStmt = $pdo->prepare('SELECT id, name, username, email, role, status FROM users WHERE id = :id LIMIT 1');
+    $oldUserStmt->execute(['id' => $id]);
+    $oldUser = $oldUserStmt->fetch();
+
     if ((int)$target['id'] === (int)$owner['id'] && $status === 'inactive') {
         respond(['success' => false, 'message' => 'You cannot disable your own account.'], 422);
     }
@@ -138,7 +148,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 
-    log_activity((int)$owner['id'], 'user_updated', "Updated user ID: $id");
+    $oldValues = $oldUser ? [
+        'name' => $oldUser['name'],
+        'email' => $oldUser['email'],
+        'role' => $oldUser['role'],
+        'status' => $oldUser['status'],
+    ] : null;
+    $newValues = [
+        'name' => $name,
+        'email' => $email !== '' ? $email : null,
+        'role' => $role,
+        'status' => $status,
+    ];
+    if ($password !== '') {
+        $newValues['password_changed'] = true;
+    }
+    audit_log((int)$owner['id'], 'user_updated', "Updated user ID: $id", 'success', [
+        'module' => 'users',
+        'description' => "User updated: {$name} (ID: {$id})",
+        'entity_type' => 'user',
+        'entity_id' => $id,
+        'old_values' => $oldValues,
+        'new_values' => $newValues,
+    ]);
 
     respond(['success' => true, 'message' => 'User updated successfully.']);
 }

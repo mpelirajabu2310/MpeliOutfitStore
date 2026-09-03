@@ -36,7 +36,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $oldPath = $productService->getProductImage($productId);
         $productService->setProductImage($productId, null);
         $imageService->removeImageFile($oldPath);
-        log_activity((int)$user['id'], 'product_image_removed', "Product ID: {$productId}");
+        audit_log((int)$user['id'], 'product_image_removed', "Product ID: {$productId}", 'success', [
+            'module' => 'products',
+            'description' => "Product image removed (ID: {$productId})",
+            'entity_type' => 'product',
+            'entity_id' => $productId,
+            'old_values' => ['image_path' => $oldPath],
+        ]);
         respond(['success' => true, 'message' => 'Product image removed.']);
     }
 
@@ -57,7 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $productService->setProductImage($productId, $newPath);
     $imageService->removeImageFile($oldPath);
 
-    log_activity((int)$user['id'], 'product_image_updated', "Product ID: {$productId}, Image: {$newPath}");
+    audit_log((int)$user['id'], 'product_image_updated', "Product ID: {$productId}, Image: {$newPath}", 'success', [
+        'module' => 'products',
+        'description' => "Product image updated (ID: {$productId})",
+        'entity_type' => 'product',
+        'entity_id' => $productId,
+        'old_values' => ['image_path' => $oldPath],
+        'new_values' => ['image_path' => $newPath],
+    ]);
     respond(['success' => true, 'message' => 'Product image updated.', 'image_path' => $newPath]);
 }
 

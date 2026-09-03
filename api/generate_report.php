@@ -100,10 +100,24 @@ $safeTitle = preg_replace('/[^A-Za-z0-9 _\-]/', '', (string)($report['meta']['ti
 $safeTitle = trim(preg_replace('/\s+/', ' ', $safeTitle) ?? '');
 $filename = 'MpeliOutFitStore Report - ' . ($safeTitle !== '' ? $safeTitle : 'Report') . '.' . $format;
 
-log_activity(
+audit_log(
     (int)$user['id'],
     'report_generated',
-    "Format: {$format}, Period: {$period}, Type: {$type}, Categories: " . implode(', ', $report['meta']['categories'] ?? []) . ", Range: " . (($report['meta']['period_start'] ?? '') . ' - ' . ($report['meta']['period_end'] ?? ''))
+    "Format: {$format}, Period: {$period}, Type: {$type}, Categories: " . implode(', ', $report['meta']['categories'] ?? []) . ", Range: " . (($report['meta']['period_start'] ?? '') . ' - ' . ($report['meta']['period_end'] ?? '')),
+    'success',
+    [
+        'module' => 'reports',
+        'description' => "Report generated and downloaded ({$format}, {$period}, {$type})",
+        'entity_type' => 'report',
+        'new_values' => [
+            'format' => $format,
+            'period' => $period,
+            'type' => $type,
+            'categories' => $report['meta']['categories'] ?? [],
+            'period_start' => $report['meta']['period_start'] ?? null,
+            'period_end' => $report['meta']['period_end'] ?? null,
+        ],
+    ]
 );
 
 if ($format === 'pdf') {

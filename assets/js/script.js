@@ -73,7 +73,7 @@ function clearCartState() {
   }
 }
 
-const KNOWN_PAGES = ["dashboard", "products", "sales", "expenses", "inventory", "reports", "users", "settings"];
+const KNOWN_PAGES = ["dashboard", "products", "sales", "expenses", "inventory", "reports", "analytics", "users", "audit", "backup", "settings"];
 
 function rememberPage(page) {
   if (!KNOWN_PAGES.includes(page)) return;
@@ -153,6 +153,22 @@ function setTheme(theme) {
 }
 function toggleTheme() {
   setTheme(document.body.classList.contains("dark") ? "light" : "dark");
+  refreshChartsAfterTheme();
+}
+
+// Rebuild active amCharts so they pick up the re-themed CSS palette.
+function refreshChartsAfterTheme() {
+  window.MpeliCharts?.clearThemeCache?.();
+  setTimeout(() => {
+    try {
+      if (document.querySelector("#dashboard")?.classList.contains("active")) {
+        loadDashboard({ background: true }).catch(() => {});
+      }
+      if (document.querySelector("#analytics")?.classList.contains("active")) {
+        loadBIView().catch(() => {});
+      }
+    } catch (e) {}
+  }, 60);
 }
 // Apply theme immediately before any render
 setTheme(getStoredTheme());
@@ -869,8 +885,16 @@ async function loadDashboard(options = {}) {
     <tr><td colspan="7">${t("sales.noCompletedSales")}</td></tr>
   `;
 
-  renderBarChart(document.querySelector(".revenue-chart") || document.querySelector(".bar-chart"), payload.revenue_chart, payload.has_revenue_chart, "value", true);
-  renderBarChart(document.querySelector(".profit-chart"), payload.profit_chart, payload.has_profit_chart, "value", true);
+  if (window.MpeliDashboardCharts && window.MpeliCharts?.am5) {
+    window.MpeliDashboardCharts.render(payload);
+  } else if (window.MpeliCharts) {
+    window.MpeliCharts.onReady(() => {
+      if (window.MpeliDashboardCharts?.render) window.MpeliDashboardCharts.render(payload);
+    });
+  } else {
+    renderBarChart(document.querySelector(".revenue-chart") || document.querySelector(".bar-chart"), payload.revenue_chart, payload.has_revenue_chart, "value", true);
+    renderBarChart(document.querySelector(".profit-chart"), payload.profit_chart, payload.has_profit_chart, "value", true);
+  }
 
   renderSellerAnalytics(payload.analytics);
 }
@@ -941,6 +965,21 @@ function renderSaleDetailsContent(sale) {
   let totalDiscount = 0;
   const isOwner = currentUser && currentUser.role === "OWNER";
 
+  const shopInfo = sale.shop || {};
+  const shopName = escapeHtml(shopInfo.shop_name || shopNameGlobal || "Mpeli Outfit Store");
+  const shopAddress = shopInfo.address ? escapeHtml(shopInfo.address) : "";
+  const shopPhone = shopInfo.phone ? escapeHtml(shopInfo.phone) : "";
+  const shopEmail = shopInfo.email ? escapeHtml(shopInfo.email) : "";
+  const receiptFooterText = shopInfo.receipt_footer || receiptFooterGlobal || "";
+  const logoUrl = shopInfo.logo_url || "assets/images/logo.png";
+
+  const customerName = sale.customer_name ? escapeHtml(sale.customer_name) : null;
+  const customerPhone = sale.customer_phone ? escapeHtml(sale.customer_phone) : null;
+
+  const paymentMethod = sale.payment_method || "cash";
+  const paymentLabels = { cash: t("payment.cash"), card: t("payment.card"), mobile_money: t("payment.mobileMoney") };
+  const paymentLabel = paymentLabels[paymentMethod] || paymentMethod;
+
   const itemsHtml = (sale.items || []).map((item, i) => {
     const qty = parseInt(item.quantity, 10) || 0;
     const unitPrice = parseFloat(item.selling_price) || 0;
@@ -956,67 +995,210 @@ function renderSaleDetailsContent(sale) {
     const variantParts = [];
     if (item.size_label) variantParts.push(escapeHtml(item.size_label));
     if (item.color_label) variantParts.push(escapeHtml(item.color_label));
-    const variantStr = variantParts.length > 0 ? `<br><small class="sale-details-variant">${variantParts.join(" / ")}</small>` : "";
+    const variantStr = variantParts.length > 0 ? `<br><small class="receipt-item-variant">${variantParts.join(" / ")}</small>` : "";
 
     return `<tr>
-      <td>${i + 1}</td>
       <td>${productName}${variantStr}</td>
-      <td>${qty}</td>
-      <td>${money(unitPrice)}</td>
-      <td>${lineDiscount > 0 ? money(lineDiscount) : "—"}</td>
-      <td>${money(lineTotal)}</td>
+      <td class="receipt-col-center">${qty}</td>
+      <td class="receipt-col-right">${money(unitPrice)}</td>
+      <td class="receipt-col-right">${lineDiscount > 0 ? money(lineDiscount) : "—"}</td>
+      <td class="receipt-col-right receipt-col-total">${money(lineTotal)}</td>
     </tr>`;
   }).join("");
 
   const headerDiscount = parseFloat(sale.discount_amount) || totalDiscount;
-  const totalItems = sale.items ? sale.items.length : 0;
+  const totalProductTypes = sale.items ? sale.items.length : 0;
 
   content.innerHTML = `
-    <div class="sale-details-header">
-      <div class="sale-details-receipt">${escapeHtml(sale.receipt_number)}</div>
-      <div class="sale-details-meta">
-        <span><i class="bi bi-calendar3"></i> ${dateStr}</span>
-        <span><i class="bi bi-clock"></i> ${timeStr}</span>
-        <span><i class="bi bi-person"></i> ${escapeHtml(sale.seller_name)}</span>
+    <div class="receipt-print-area" id="receiptPrintArea">
+      <div class="receipt-brand">
+        <img src="${logoUrl}" alt="${shopName}" class="receipt-logo" onerror="this.style.display='none'" />
+        <h2 class="receipt-store-name">${shopName}</h2>
+        ${shopAddress ? `<p class="receipt-contact"><i class="bi bi-geo-alt"></i> ${shopAddress}</p>` : ""}
+        ${shopPhone ? `<p class="receipt-contact"><i class="bi bi-telephone"></i> ${shopPhone}</p>` : ""}
+        ${shopEmail ? `<p class="receipt-contact"><i class="bi bi-envelope"></i> ${shopEmail}</p>` : ""}
       </div>
-    </div>
-    <div class="sale-details-table-wrap">
-      <table class="sale-details-table">
-        <thead><tr>
-          <th>#</th>
-          <th>${t("saleDetails.product")}</th>
-          <th>${t("saleDetails.qty")}</th>
-          <th>${t("saleDetails.unitPrice")}</th>
-          <th>${t("saleDetails.discount")}</th>
-          <th>${t("saleDetails.subtotal")}</th>
-        </tr></thead>
-        <tbody>${itemsHtml || `<tr><td colspan="6" class="sale-details-empty">${t("saleDetails.noItems")}</td></tr>`}</tbody>
+
+      <div class="receipt-divider-thick"></div>
+
+      <div class="receipt-header-info">
+        <div class="receipt-meta-row">
+          <span class="receipt-meta-label">${t("saleDetails.receiptNo") || "Receipt No."}</span>
+          <span class="receipt-meta-value">${escapeHtml(sale.receipt_number)}</span>
+        </div>
+        <div class="receipt-meta-row">
+          <span class="receipt-meta-label">${t("saleDetails.date") || "Date"}</span>
+          <span class="receipt-meta-value">${dateStr}</span>
+        </div>
+        <div class="receipt-meta-row">
+          <span class="receipt-meta-label">${t("saleDetails.time") || "Time"}</span>
+          <span class="receipt-meta-value">${timeStr}</span>
+        </div>
+        <div class="receipt-meta-row">
+          <span class="receipt-meta-label">${t("saleDetails.soldBy") || "Sold by"}</span>
+          <span class="receipt-meta-value">${escapeHtml(sale.seller_name)}</span>
+        </div>
+        ${customerName ? `<div class="receipt-meta-row">
+          <span class="receipt-meta-label">${t("saleDetails.customer") || "Customer"}</span>
+          <span class="receipt-meta-value">${customerName}</span>
+        </div>` : ""}
+        ${customerPhone ? `<div class="receipt-meta-row">
+          <span class="receipt-meta-label">${t("saleDetails.phone") || "Phone"}</span>
+          <span class="receipt-meta-value">${customerPhone}</span>
+        </div>` : ""}
+      </div>
+
+      <div class="receipt-divider"></div>
+
+      <table class="receipt-items-table">
+        <thead>
+          <tr>
+            <th>${t("saleDetails.product")}</th>
+            <th class="receipt-col-center">${t("saleDetails.qty")}</th>
+            <th class="receipt-col-right">${t("saleDetails.unitPrice")}</th>
+            <th class="receipt-col-right">${t("saleDetails.discount")}</th>
+            <th class="receipt-col-right">${t("saleDetails.subtotal")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml || `<tr><td colspan="5" class="receipt-empty">${t("saleDetails.noItems")}</td></tr>`}
+        </tbody>
       </table>
-    </div>
-    <div class="sale-details-summary">
-      <div class="sale-details-summary-row">
-        <span>${t("saleDetails.productTypes")}</span><span>${totalItems}</span>
+
+      <div class="receipt-divider"></div>
+
+      <div class="receipt-summary">
+        <div class="receipt-summary-row">
+          <span>${t("saleDetails.totalItems") || "Total Items"}</span>
+          <span>${totalProductTypes}</span>
+        </div>
+        <div class="receipt-summary-row">
+          <span>${t("saleDetails.totalQuantity") || "Total Quantity"}</span>
+          <span>${totalQuantity}</span>
+        </div>
+        ${headerDiscount > 0 ? `<div class="receipt-summary-row receipt-summary-discount">
+          <span>${t("saleDetails.totalDiscount") || "Total Discount"}</span>
+          <span>- ${money(headerDiscount)}</span>
+        </div>` : ""}
+        <div class="receipt-summary-row receipt-summary-total">
+          <span>${t("saleDetails.totalPaid") || "Total Amount"}</span>
+          <span>${money(sale.total_amount)}</span>
+        </div>
       </div>
-      <div class="sale-details-summary-row">
-        <span>${t("saleDetails.totalQuantity")}</span><span>${totalQuantity}</span>
+
+      <div class="receipt-divider"></div>
+
+      <div class="receipt-payment-info">
+        <div class="receipt-summary-row">
+          <span>${t("saleDetails.paymentMethod") || "Payment Method"}</span>
+          <span>${paymentLabel}</span>
+        </div>
       </div>
-      ${headerDiscount > 0 ? `<div class="sale-details-summary-row">
-        <span>${t("saleDetails.totalDiscount")}</span><span>${money(headerDiscount)}</span>
+
+      ${isOwner ? `
+      <div class="receipt-divider"></div>
+      <div class="receipt-profit-info">
+        <div class="receipt-summary-row">
+          <span>${t("saleDetails.profit") || "Profit"}</span>
+          <span class="receipt-profit-value">${money(sale.total_profit)}</span>
+        </div>
       </div>` : ""}
-      <div class="sale-details-summary-row sale-details-total">
-        <span>${t("saleDetails.totalPaid")}</span><span>${money(sale.total_amount)}</span>
+
+      <div class="receipt-divider-thick"></div>
+
+      <div class="receipt-footer-area">
+        ${receiptFooterText ? `<p class="receipt-footer-message">${escapeHtml(receiptFooterText)}</p>` : ""}
+        <p class="receipt-thankyou">${t("saleDetails.thankYou") || "Thank you for your purchase!"}</p>
+        <p class="receipt-powered">${t("saleDetails.poweredBy") || "Powered by Mpeli Outfit Store"}</p>
       </div>
-      ${isOwner ? `<div class="sale-details-summary-row sale-details-profit">
-        <span>${t("saleDetails.profit")}</span><span>${money(sale.total_profit)}</span>
-      </div>` : ""}
     </div>
+
     <div class="sale-details-footer">
+      <div class="receipt-actions">
+        <button type="button" class="ghost-button receipt-action-btn" id="receiptPrintBtn" title="${t("saleDetails.print") || "Print Receipt"}">
+          <i class="bi bi-printer"></i> ${t("saleDetails.print") || "Print"}
+        </button>
+        <button type="button" class="ghost-button receipt-action-btn" id="receiptDownloadBtn" title="${t("saleDetails.download") || "Download PDF"}">
+          <i class="bi bi-file-earmark-pdf"></i> ${t("saleDetails.download") || "Download PDF"}
+        </button>
+      </div>
       <button type="button" class="ghost-button" id="saleDetailsCloseBtn">${t("common.close")}</button>
     </div>
   `;
 
   document.querySelector("#saleDetailsCloseBtn")?.addEventListener("click", closeSaleDetailsModal);
   document.querySelector("#saleDetailsClose")?.addEventListener("click", closeSaleDetailsModal);
+
+  document.querySelector("#receiptPrintBtn")?.addEventListener("click", () => {
+    printReceipt();
+  });
+
+  document.querySelector("#receiptDownloadBtn")?.addEventListener("click", () => {
+    printReceipt();
+  });
+}
+
+function printReceipt() {
+  const printArea = document.querySelector("#receiptPrintArea");
+  if (!printArea) return;
+
+  const printWindow = window.open("", "_blank", "width=800,height=600");
+  if (!printWindow) {
+    showToast(t("saleDetails.printBlocked") || "Popup blocked. Please allow popups for printing.", "error");
+    return;
+  }
+
+  printWindow.document.write("<!DOCTYPE html><html><head><title>Receipt</title>");
+  printWindow.document.write("<style>");
+  printWindow.document.write("*{margin:0;padding:0;box-sizing:border-box}");
+  printWindow.document.write("body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#fff;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact}");
+  printWindow.document.write(".receipt-print-area{max-width:400px;margin:0 auto;padding:20px 16px}");
+  printWindow.document.write(".receipt-brand{text-align:center;margin-bottom:12px}");
+  printWindow.document.write(".receipt-logo{max-width:80px;max-height:80px;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto}");
+  printWindow.document.write(".receipt-store-name{font-size:20px;font-weight:700;letter-spacing:0.5px;margin-bottom:4px}");
+  printWindow.document.write(".receipt-contact{font-size:12px;color:#555;margin:2px 0;display:flex;align-items:center;justify-content:center;gap:4px}");
+  printWindow.document.write(".receipt-contact i{font-size:11px}");
+  printWindow.document.write(".receipt-divider{border-top:1px dashed #ccc;margin:10px 0}");
+  printWindow.document.write(".receipt-divider-thick{border-top:2px solid #1a1a1a;margin:12px 0}");
+  printWindow.document.write(".receipt-header-info{margin-bottom:8px}");
+  printWindow.document.write(".receipt-meta-row{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}");
+  printWindow.document.write(".receipt-meta-label{color:#666}");
+  printWindow.document.write(".receipt-meta-value{font-weight:600;text-align:right}");
+  printWindow.document.write(".receipt-items-table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}");
+  printWindow.document.write(".receipt-items-table thead th{text-align:left;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.3px;padding:6px 4px;border-bottom:1px solid #ddd}");
+  printWindow.document.write(".receipt-items-table thead th.receipt-col-center{text-align:center}");
+  printWindow.document.write(".receipt-items-table thead th.receipt-col-right{text-align:right}");
+  printWindow.document.write(".receipt-items-table tbody td{padding:6px 4px;border-bottom:1px solid #eee;vertical-align:top}");
+  printWindow.document.write(".receipt-items-table td.receipt-col-center{text-align:center}");
+  printWindow.document.write(".receipt-items-table td.receipt-col-right{text-align:right}");
+  printWindow.document.write(".receipt-items-table td.receipt-col-total{font-weight:600}");
+  printWindow.document.write(".receipt-item-variant{color:#777;font-size:11px}");
+  printWindow.document.write(".receipt-empty{text-align:center;color:#999;padding:16px 4px}");
+  printWindow.document.write(".receipt-summary{margin:8px 0}");
+  printWindow.document.write(".receipt-summary-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#555}");
+  printWindow.document.write(".receipt-summary-row span:last-child{font-weight:500;color:#1a1a1a}");
+  printWindow.document.write(".receipt-summary-discount span:last-child{color:#e74c3c}");
+  printWindow.document.write(".receipt-summary-total{border-top:1px solid #ddd;margin-top:6px;padding-top:8px}");
+  printWindow.document.write(".receipt-summary-total span{font-weight:700;font-size:16px !important;color:#1a1a1a !important}");
+  printWindow.document.write(".receipt-payment-info{margin:8px 0;font-size:13px}");
+  printWindow.document.write(".receipt-profit-info{margin:8px 0;font-size:13px}");
+  printWindow.document.write(".receipt-profit-value{color:#27ae60;font-weight:600}");
+  printWindow.document.write(".receipt-footer-area{text-align:center;margin-top:12px}");
+  printWindow.document.write(".receipt-footer-message{font-size:12px;color:#666;margin-bottom:6px;font-style:italic}");
+  printWindow.document.write(".receipt-thankyou{font-size:14px;font-weight:600;margin-bottom:4px}");
+  printWindow.document.write(".receipt-powered{font-size:11px;color:#999}");
+  printWindow.document.write("@media print{body{margin:0;padding:0}.receipt-print-area{max-width:100%;padding:10px 8px}}");
+  printWindow.document.write("</style></head><body>");
+  printWindow.document.write(printArea.innerHTML);
+  printWindow.document.write("</body></html>");
+  printWindow.document.close();
+
+  printWindow.onload = function() {
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 300);
+  };
 }
 
 async function loadReports(options = {}) {
@@ -1261,6 +1443,874 @@ function showToast(message, type) {
     el.classList.add("removing");
     setTimeout(() => el.remove(), 250);
   }, 3000);
+}
+
+// ─── Audit Log Management (OWNER only) ─────────────────────────────────────
+let auditCurrentPage = 1;
+let auditPerPage = 25;
+let auditFilterOptions = { users: [], modules: [], actions: [], entity_types: [] };
+// Guards the audit detail modal against rapid double-clicks firing multiple
+// simultaneous requests, and lets a newer request supersede an older one.
+let auditDetailPendingId = null;
+let auditDetailRequestToken = null;
+
+async function loadAuditLog() {
+  if (!isOwner()) return;
+  const params = new URLSearchParams();
+  params.set("page", String(auditCurrentPage));
+  params.set("per_page", String(auditPerPage));
+
+  const search = document.querySelector("#auditSearch")?.value.trim() || "";
+  if (search) params.set("search", search);
+  const from = document.querySelector("#auditDateFrom")?.value || "";
+  if (from) params.set("date_from", from);
+  const to = document.querySelector("#auditDateTo")?.value || "";
+  if (to) params.set("date_to", to);
+  const user = document.querySelector("#auditUserFilter")?.value || "";
+  if (user) params.set("user_id", user);
+  const role = document.querySelector("#auditRoleFilter")?.value || "";
+  if (role) params.set("role", role);
+  const module = document.querySelector("#auditModuleFilter")?.value || "";
+  if (module) params.set("module", module);
+  const action = document.querySelector("#auditActionFilter")?.value || "";
+  if (action) params.set("action", action);
+  const entity = document.querySelector("#auditEntityFilter")?.value || "";
+  if (entity) params.set("entity_type", entity);
+
+  const body = document.querySelector("#auditBody");
+  if (body) body.innerHTML = `<tr><td colspan="8">${t("audit.loading")}</td></tr>`;
+
+  try {
+    const payload = await apiRequest(`api/audit.php?${params.toString()}`);
+    if (!payload.success) throw new Error(payload.message);
+
+    auditFilterOptions = payload.filter_options || auditFilterOptions;
+    populateAuditFilterOptions();
+    renderAuditLogs(payload.logs || []);
+    renderAuditPagination(payload);
+  } catch (e) {
+    if (body) body.innerHTML = `<tr><td colspan="8">${t("audit.error")}</td></tr>`;
+  }
+}
+
+function populateAuditFilterOptions() {
+  const userSel = document.querySelector("#auditUserFilter");
+  if (userSel && auditFilterOptions.users && auditFilterOptions.users.length) {
+    const current = userSel.value;
+    userSel.innerHTML = `<option value="">${t("audit.allUsers")}</option>` +
+      auditFilterOptions.users.map(u =>
+        `<option value="${u.user_id}" ${String(u.user_id) === String(current) ? "selected" : ""}>${escapeHtml(u.user_name)}</option>`
+      ).join("");
+  }
+
+  const modSel = document.querySelector("#auditModuleFilter");
+  if (modSel && auditFilterOptions.modules && auditFilterOptions.modules.length) {
+    const current = modSel.value;
+    modSel.innerHTML = `<option value="">${t("audit.allModules")}</option>` +
+      auditFilterOptions.modules.map(m =>
+        `<option value="${escapeHtml(m)}" ${m === current ? "selected" : ""}>${escapeHtml(m)}</option>`
+      ).join("");
+  }
+
+  const actSel = document.querySelector("#auditActionFilter");
+  if (actSel && auditFilterOptions.actions && auditFilterOptions.actions.length) {
+    const current = actSel.value;
+    actSel.innerHTML = `<option value="">${t("audit.allActions")}</option>` +
+      auditFilterOptions.actions.map(a =>
+        `<option value="${escapeHtml(a)}" ${a === current ? "selected" : ""}>${escapeHtml(a)}</option>`
+      ).join("");
+  }
+
+  const entSel = document.querySelector("#auditEntityFilter");
+  if (entSel && auditFilterOptions.entity_types && auditFilterOptions.entity_types.length) {
+    const current = entSel.value;
+    entSel.innerHTML = `<option value="">${t("audit.allEntities")}</option>` +
+      auditFilterOptions.entity_types.map(e =>
+        `<option value="${escapeHtml(e)}" ${e === current ? "selected" : ""}>${escapeHtml(e)}</option>`
+      ).join("");
+  }
+}
+
+function formatAuditDate(datetime) {
+  if (!datetime) return "";
+  const d = new Date(datetime.replace(" ", "T"));
+  if (isNaN(d.getTime())) return escapeHtml(datetime);
+  const opts = { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" };
+  return d.toLocaleString(undefined, opts);
+}
+
+function renderAuditLogs(logs) {
+  const body = document.querySelector("#auditBody");
+  const count = document.querySelector("#auditResultCount");
+  if (!body) return;
+
+  if (count) count.textContent = logs.length ? `${logs.length} ${t("audit.records")}` : "";
+
+  if (!logs.length) {
+    body.innerHTML = `<tr><td colspan="8">${t("audit.noRecords")}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = logs.map(log => `
+    <tr data-audit-id="${log.id}">
+      <td class="nowrap">${formatAuditDate(log.created_at)}</td>
+      <td>${escapeHtml(log.user_name || "-")}</td>
+      <td>${escapeHtml(log.user_role || "-")}</td>
+      <td>${escapeHtml(log.action)}</td>
+      <td>${escapeHtml(log.module)}</td>
+      <td class="audit-desc-cell" title="${escapeHtml(log.description || "")}">${escapeHtml(truncateText(log.description || "-", 60))}</td>
+      <td class="nowrap">${escapeHtml(log.ip_address || "-")}</td>
+      <td class="nowrap"><button type="button" class="ghost-button" data-audit-view="${log.id}"><i class="bi bi-eye"></i> ${t("audit.viewDetails")}</button></td>
+    </tr>
+  `).join("");
+}
+
+function renderAuditPagination(data) {
+  const el = document.querySelector("#auditPagination");
+  if (!el) return;
+  const { total_pages, page, total } = data;
+  if (total === 0 || total_pages <= 1) {
+    el.innerHTML = "";
+    return;
+  }
+  let html = `<div class="pagination-info">${t("audit.pageOf", { page, total: total_pages })} (${total} ${t("audit.records")})</div><div class="pagination-controls">`;
+  html += `<button type="button" class="ghost-button" data-audit-page="${page - 1}" ${page <= 1 ? "disabled" : ""}><i class="bi bi-chevron-left"></i></button>`;
+  html += `<span class="pagination-page">${page} / ${total_pages}</span>`;
+  html += `<button type="button" class="ghost-button" data-audit-page="${page + 1}" ${page >= total_pages ? "disabled" : ""}><i class="bi bi-chevron-right"></i></button>`;
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function truncateText(str, n) {
+  return str.length > n ? str.slice(0, n - 3) + "..." : str;
+}
+
+function auditNotRecorded() {
+  return escapeHtml(t("audit.notRecorded"));
+}
+
+function auditValue(value) {
+  if (value === undefined || value === null || value === "") return `<span class="audit-na">${auditNotRecorded()}</span>`;
+  return escapeHtml(String(value));
+}
+
+function formatAuditDateTime(datetime) {
+  if (!datetime) return { date: "", time: "" };
+  const d = new Date(datetime.replace(" ", "T"));
+  if (isNaN(d.getTime())) return { date: escapeHtml(datetime), time: "" };
+  return {
+    date: d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" }),
+    time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+  };
+}
+
+function openAuditDetail(log) {
+  const body = document.querySelector("#auditDetailBody");
+  const modal = document.querySelector("#auditDetailModal");
+  if (!body || !modal) return;
+
+  const dt = formatAuditDateTime(log.created_at);
+  const uaInfo = parseUserAgent(log.user_agent);
+  const hasEntity = log.entity_type || log.entity_id;
+  const oldV = log.old_values && typeof log.old_values === "object" ? log.old_values : {};
+  const newV = log.new_values && typeof log.new_values === "object" ? log.new_values : {};
+  const hasChanges = Object.keys(oldV).length > 0 || Object.keys(newV).length > 0;
+
+  const gridItem = (label, valueHtml) =>
+    `<div class="audit-detail-item"><span class="audit-detail-label">${label}</span><span class="audit-detail-value">${valueHtml}</span></div>`;
+
+  const entityRef = hasEntity && log.entity_reference
+    ? escapeHtml(log.entity_reference)
+    : auditNotRecorded();
+
+  const descriptionHtml = log.description
+    ? `<div class="audit-detail-desc"><span class="audit-detail-label">${t("audit.description")}</span><div class="audit-detail-value">${escapeHtml(log.description)}</div></div>`
+    : "";
+
+  const userAgentHtml = log.user_agent
+    ? escapeHtml(log.user_agent)
+    : auditNotRecorded();
+
+  body.innerHTML = `
+    <div class="audit-detail">
+      <section class="audit-detail-section">
+        <h4 class="audit-section-title">${t("audit.generalInfo")}</h4>
+        <div class="audit-detail-grid">
+          ${gridItem(t("audit.id"), auditValue(log.id))}
+          ${gridItem(t("audit.date"), auditValue(dt.date))}
+          ${gridItem(t("audit.exactTime"), auditValue(dt.time))}
+          ${gridItem(t("audit.user"), auditValue(log.user_name))}
+          ${gridItem(t("audit.userId"), auditValue(log.user_id))}
+          ${gridItem(t("audit.role"), auditValue(log.user_role))}
+          ${gridItem(t("audit.action"), auditValue(log.action))}
+          ${gridItem(t("audit.module"), auditValue(log.module))}
+        </div>
+        ${descriptionHtml}
+      </section>
+      <section class="audit-detail-section">
+        <h4 class="audit-section-title">${t("audit.affectedEntity")}</h4>
+        <div class="audit-detail-grid">
+          ${gridItem(t("audit.entityType"), hasEntity ? auditValue(log.entity_type) : auditNotRecorded())}
+          ${gridItem(t("audit.entityId"), hasEntity ? auditValue(log.entity_id) : auditNotRecorded())}
+          ${gridItem(t("audit.entityReference"), entityRef)}
+        </div>
+      </section>
+      <section class="audit-detail-section">
+        <h4 class="audit-section-title">${t("audit.changedFields")}</h4>
+        ${hasChanges ? renderAuditChanges(oldV, newV) : `<div class="audit-no-changes">${escapeHtml(t("audit.noChanges"))}</div>`}
+      </section>
+      <section class="audit-detail-section">
+        <h4 class="audit-section-title">${t("audit.deviceInfo")}</h4>
+        <div class="audit-detail-grid">
+          ${gridItem(t("audit.ip"), auditValue(log.ip_address))}
+          ${gridItem(t("audit.browser"), auditValue(uaInfo.browser))}
+          ${gridItem(t("audit.os"), auditValue(uaInfo.os))}
+          ${gridItem(t("audit.deviceType"), auditValue(uaInfo.device))}
+        </div>
+        <div class="audit-detail-desc">
+          <span class="audit-detail-label">${t("audit.userAgent")}</span>
+          <div class="audit-detail-ua">${userAgentHtml}</div>
+        </div>
+      </section>
+    </div>
+  `;
+  modal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+async function openAuditDetailFromServer(id) {
+  const modal = document.querySelector("#auditDetailModal");
+  const body = document.querySelector("#auditDetailBody");
+  if (!modal || !body) return;
+
+  // Rapid-click protection: only one detail request in flight at a time.
+  if (auditDetailPendingId !== null) return;
+  const token = generateRequestKey();
+  auditDetailPendingId = String(id);
+  auditDetailRequestToken = token;
+
+  body.innerHTML = `<div class="audit-detail-state" role="status"><span class="audit-spinner" aria-hidden="true"></span><span>${escapeHtml(t("audit.loadingDetail"))}</span></div>`;
+  modal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+
+  try {
+    const params = new URLSearchParams({ id: String(id), detail: "1" });
+    const payload = await apiRequest(`api/audit.php?${params.toString()}`);
+    if (token !== auditDetailRequestToken) return; // superseded by a newer view
+    if (!payload.success || !payload.log) throw new Error("missing log");
+    openAuditDetail(payload.log);
+  } catch (e) {
+    if (token !== auditDetailRequestToken) return;
+    body.innerHTML = `<div class="audit-detail-state audit-detail-state-error" role="alert"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i><span>${escapeHtml(t("audit.errorDetail"))}</span></div>`;
+  } finally {
+    if (token === auditDetailRequestToken) {
+      auditDetailPendingId = null;
+      auditDetailRequestToken = null;
+    }
+  }
+}
+
+function renderAuditChanges(oldV, newV) {
+  const keys = new Set([...Object.keys(oldV || {}), ...Object.keys(newV || {})]);
+  if (!keys.size) return `<div class="audit-no-changes">${escapeHtml(t("audit.noChanges"))}</div>`;
+  const rows = [...keys].map(key => {
+    const oldVal = oldV[key];
+    const newVal = newV[key];
+    const haveOld = oldVal !== undefined && oldVal !== null && oldVal !== "";
+    const haveNew = newVal !== undefined && newVal !== null && newVal !== "";
+    const oldHtml = haveOld ? formatChangeValue(oldVal) : `<span class="audit-empty">—</span>`;
+    const newHtml = haveNew ? formatChangeValue(newVal) : `<span class="audit-empty">—</span>`;
+    return `
+      <tr>
+        <td class="audit-change-key-cell">${escapeHtml(humanizeFieldName(key))}</td>
+        <td class="audit-before">${oldHtml}</td>
+        <td class="audit-after">${newHtml}</td>
+      </tr>`;
+  }).join("");
+  return `
+    <div class="audit-change-table-wrap">
+      <table class="audit-change-table">
+        <thead>
+          <tr><th>${escapeHtml(t("audit.field"))}</th><th>${escapeHtml(t("audit.before"))}</th><th>${escapeHtml(t("audit.after"))}</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function formatChangeValue(v) {
+  if (v === null || v === undefined) return `<span class="audit-empty">—</span>`;
+  if (typeof v === "number") {
+    const formatted = Math.abs(v) >= 1000 ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(v);
+    return `<span class="audit-val-num">${escapeHtml(formatted)}</span>`;
+  }
+  if (typeof v === "boolean") return escapeHtml(v ? "true" : "false");
+  if (typeof v === "object") {
+    try {
+      return `<span class="audit-val-json"><pre>${escapeHtml(JSON.stringify(v, null, 2))}</pre></span>`;
+    } catch (_) { return escapeHtml(String(v)); }
+  }
+  return escapeHtml(String(v));
+}
+
+function humanizeFieldName(key) {
+  if (!key) return key;
+  let out = String(key).replace(/_/g, " ");
+  out = out.replace(/([a-z])([A-Z])/g, "$1 $2");
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+function parseUserAgent(ua) {
+  const unknown = t("audit.unknown");
+  if (!ua) return { browser: unknown, os: unknown, device: unknown };
+  let browser = unknown;
+  let os = unknown;
+  let device = "Desktop";
+  const u = String(ua);
+  if (/Edg\//.test(u)) browser = "Edge";
+  else if (/OPR\/|Opera/.test(u)) browser = "Opera";
+  else if (/Chrome\//.test(u)) browser = "Chrome";
+  else if (/Firefox\//.test(u)) browser = "Firefox";
+  else if (/Safari\//.test(u)) browser = "Safari";
+  else if (/MSIE|Trident/.test(u)) browser = "Internet Explorer";
+
+  if (/Windows/.test(u)) os = "Windows";
+  else if (/Android/.test(u)) os = "Android";
+  else if (/iPhone|iPad|iPod/.test(u)) os = "iOS";
+  else if (/Mac OS/.test(u)) os = "macOS";
+  else if (/Linux/.test(u)) os = "Linux";
+
+  if (/iPad|Tablet|PlayBook|Silk/.test(u)) device = "Tablet";
+  else if (/Mobi|Android|iPhone|iPod|Opera Mini|BlackBerry|IEMobile/.test(u)) device = "Mobile";
+
+  return { browser, os, device };
+}
+
+function bindAuditEvents() {
+  const applyBtn = document.querySelector("#auditApplyFilters");
+  if (applyBtn) applyBtn.addEventListener("click", () => { auditCurrentPage = 1; loadAuditLog(); });
+
+  const resetBtn = document.querySelector("#auditResetFilters");
+  if (resetBtn) resetBtn.addEventListener("click", () => {
+    auditCurrentPage = 1;
+    ["#auditSearch", "#auditDateFrom", "#auditDateTo", "#auditUserFilter", "#auditRoleFilter", "#auditModuleFilter", "#auditActionFilter", "#auditEntityFilter"].forEach(sel => {
+      const el = document.querySelector(sel);
+      if (el) el.value = "";
+    });
+    loadAuditLog();
+  });
+
+  ["#auditDateFrom", "#auditDateTo"].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) el.addEventListener("change", () => { auditCurrentPage = 1; loadAuditLog(); });
+  });
+  ["#auditUserFilter", "#auditRoleFilter", "#auditModuleFilter", "#auditActionFilter", "#auditEntityFilter"].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) el.addEventListener("change", () => { auditCurrentPage = 1; loadAuditLog(); });
+  });
+
+  const refreshBtn = document.querySelector("#auditRefreshBtn");
+  if (refreshBtn) refreshBtn.addEventListener("click", () => loadAuditLog());
+
+  const searchInput = document.querySelector("#auditSearch");
+  if (searchInput) {
+    let debounce;
+    searchInput.addEventListener("input", () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => { auditCurrentPage = 1; loadAuditLog(); }, 500);
+    });
+  }
+
+  // Event delegation: view details button (document-level, bulletproof).
+  // Every "View" click always fetches the chosen record fresh from the secure
+  // server-side detail endpoint — nothing is shown from a client-side cache.
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-audit-view]");
+    if (!btn || btn.disabled) return;
+    openAuditDetailFromServer(String(btn.dataset.auditView));
+  });
+
+  document.querySelector("#auditPagination")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-audit-page]");
+    if (btn && !btn.disabled) {
+      const pg = parseInt(btn.dataset.auditPage, 10);
+      if (pg >= 1) {
+        auditCurrentPage = pg;
+        loadAuditLog();
+      }
+    }
+  });
+
+  const closeBtn = document.querySelector("#auditDetailClose");
+  const closeBtn2 = document.querySelector("#auditDetailCloseBtn");
+  if (closeBtn) closeBtn.addEventListener("click", closeAuditDetail);
+  if (closeBtn2) closeBtn2.addEventListener("click", closeAuditDetail);
+
+  // Close when clicking the dark overlay area.
+  const auditModal = document.querySelector("#auditDetailModal");
+  if (auditModal) {
+    auditModal.addEventListener("click", (e) => {
+      if (e.target === auditModal) closeAuditDetail();
+    });
+  }
+
+  // Close on Escape.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const modal = document.querySelector("#auditDetailModal");
+    if (modal && !modal.classList.contains("hidden")) closeAuditDetail();
+  });
+}
+
+function closeAuditDetail() {
+  // Abort any in-flight detail request state so a stale response can't reopen UI.
+  auditDetailPendingId = null;
+  auditDetailRequestToken = null;
+  const modal = document.querySelector("#auditDetailModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+  }
+}
+
+// ─── Backup Management (OWNER only) ────────────────────────────────────────
+let backupCache = new Map();
+let backupBusy = false;
+
+async function loadBackupDashboard() {
+  if (!isOwner()) return;
+  const body = document.querySelector("#backupHistoryBody");
+  if (body) body.innerHTML = `<tr><td colspan="7">${t("backup.loading")}</td></tr>`;
+
+  try {
+    const payload = await apiRequest("api/backup.php");
+    if (!payload.success) throw new Error(payload.message);
+
+    backupCache.clear();
+    (payload.backups || []).forEach(b => backupCache.set(b.filename, b));
+
+    renderBackupStatus(payload.status || {});
+    renderBackupHistory(payload.backups || []);
+    renderBackupRetention(payload.retention || {});
+  } catch (e) {
+    if (body) body.innerHTML = `<tr><td colspan="7">${t("backup.error")}</td></tr>`;
+  }
+}
+
+function renderBackupStatus(status) {
+  setBackupStat("backupLastDb", "backupLastDbMeta", status.last_database);
+  setBackupStat("backupLastFiles", "backupLastFilesMeta", status.last_files);
+  setBackupStat("backupLastFull", "backupLastFullMeta", status.last_full);
+
+  const count = document.querySelector("#backupCount");
+  if (count) count.textContent = String(status.count || 0);
+
+  const size = document.querySelector("#backupTotalSize");
+  if (size) size.textContent = status.total_size_human || "0 B total";
+
+  const sizeDetail = document.querySelector("#backupTotalSizeDetail");
+  if (sizeDetail) sizeDetail.textContent = status.total_size_human || "0 B";
+
+  const countDb = document.querySelector("#backupCountDb");
+  if (countDb) countDb.textContent = String(status.count_database ?? 0);
+
+  const countFiles = document.querySelector("#backupCountFiles");
+  if (countFiles) countFiles.textContent = String(status.count_files ?? 0);
+
+  const countFull = document.querySelector("#backupCountFull");
+  if (countFull) countFull.textContent = String(status.count_full ?? 0);
+
+  const opStatus = document.querySelector("#backupOperationStatus");
+  if (opStatus) {
+    opStatus.textContent = status.lock_active ? t("backup.opRunning") : t("backup.opIdle");
+    opStatus.style.color = status.lock_active ? "var(--danger)" : "var(--success)";
+  }
+
+  const storage = document.querySelector("#backupStorageInfo");
+  if (storage) {
+    const loc = status.storage_outside_webroot
+      ? t("backup.storageOutside")
+      : t("backup.storageFallback");
+    storage.textContent = `${t("backup.location")}: ${loc}`;
+  }
+
+  const storageLoc = document.querySelector("#backupStorageLocationId");
+  if (storageLoc) {
+    storageLoc.textContent = status.storage_outside_webroot
+      ? t("backup.storageOutside")
+      : t("backup.storageFallback");
+  }
+}
+
+function setBackupStat(id, metaId, backup) {
+  const el = document.querySelector("#" + id);
+  const meta = document.querySelector("#" + metaId);
+  if (el) {
+    el.textContent = backup ? formatBackupDate(backup.created_at) : t("backup.never");
+  }
+  if (meta) {
+    meta.textContent = backup
+      ? `${backup.size_human} · ${t("backup.status." + backup.status)}`
+      : t("backup.never");
+  }
+}
+
+function formatBackupDate(datetime) {
+  if (!datetime) return "—";
+  const d = new Date(datetime.replace(" ", "T"));
+  if (isNaN(d.getTime())) return datetime;
+  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+function renderBackupHistory(backups) {
+  const body = document.querySelector("#backupHistoryBody");
+  const count = document.querySelector("#backupHistoryCount");
+  if (!body) return;
+  if (count) count.textContent = backups.length ? `${backups.length} ${t("audit.records")}` : "";
+
+  if (!backups.length) {
+    body.innerHTML = `<tr><td colspan="7">${t("backup.noBackups")}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = backups.map(b => `
+    <tr data-backup-name="${escapeHtml(b.filename)}">
+      <td class="backup-filename-cell" title="${escapeHtml(b.filename)}">${escapeHtml(b.filename)}</td>
+      <td><span class="backup-type-badge type-${escapeHtml(b.type)}">${t("backup.type." + b.type)}</span></td>
+      <td class="nowrap">${formatBackupDate(b.created_at)}</td>
+      <td class="nowrap">${escapeHtml(b.size_human || "0 B")}</td>
+      <td><span class="backup-status-badge status-${escapeHtml(b.status)}">${t("backup.status." + b.status)}</span></td>
+      <td>${t("backup.system")}</td>
+      <td class="nowrap backup-actions-cell">
+        <button type="button" class="ghost-button backup-view" data-backup-view="${escapeHtml(b.filename)}"><i class="bi bi-eye"></i></button>
+        <button type="button" class="ghost-button backup-download" data-backup-download="${escapeHtml(b.filename)}"><i class="bi bi-download"></i></button>
+        ${b.type === "database" ? `<button type="button" class="ghost-button backup-restore" data-backup-restore="${escapeHtml(b.filename)}"><i class="bi bi-arrow-counterclockwise"></i></button>` : ""}
+        <button type="button" class="ghost-button backup-delete" data-backup-delete="${escapeHtml(b.filename)}"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function renderBackupRetention(retention) {
+  const daily = document.querySelector("#retentionDaily");
+  const weekly = document.querySelector("#retentionWeekly");
+  const monthly = document.querySelector("#retentionMonthly");
+  const full = document.querySelector("#retentionFull");
+  if (daily) daily.value = retention.keep_daily ?? 7;
+  if (weekly) weekly.value = retention.keep_weekly ?? 4;
+  if (monthly) monthly.value = retention.keep_monthly ?? 12;
+  if (full) full.value = retention.keep_full ?? 3;
+}
+
+async function createBackup(type) {
+  if (backupBusy) return;
+  if (!isOwner()) return;
+
+  const validTypes = ["database", "files", "full"];
+  if (!validTypes.includes(type)) return;
+
+  backupBusy = true;
+
+  const dbBtn = document.querySelector("#createDbBackupBtn");
+  const filesBtn = document.querySelector("#createFilesBackupBtn");
+  const fullBtn = document.querySelector("#createFullBackupBtn");
+  const btns = [dbBtn, filesBtn, fullBtn].filter(Boolean);
+  btns.forEach(b => { b.disabled = true; b.classList.add("btn-loading"); });
+
+  const createBtn = type === "database" ? dbBtn : type === "files" ? filesBtn : fullBtn;
+  if (createBtn) createBtn.disabled = true;
+
+  try {
+    const payload = await apiRequest("api/backup.php", {
+      method: "POST",
+      body: JSON.stringify({ action: "create", type }),
+      headers: { "Content-Type": "application/json" },
+    });
+    if (payload.backup?.success) {
+      showToast(t("backup.createdSuccess"), "success");
+    } else {
+      showToast(payload.backup?.message || t("backup.createdFailed"), "error");
+    }
+    await loadBackupDashboard();
+  } catch (e) {
+    showToast(e.message || t("backup.createdFailed"), "error");
+  } finally {
+    backupBusy = false;
+    btns.forEach(b => { b.disabled = false; b.classList.remove("btn-loading"); });
+  }
+}
+
+async function downloadBackup(filename) {
+  if (!isOwner()) return;
+  // Stream the file via fetch and trigger browser download.
+  try {
+    const response = await fetch("api/backup.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": csrfToken,
+      },
+      body: JSON.stringify({ action: "download", filename }),
+      credentials: "same-origin",
+    });
+
+    const contentType = response.headers.get("Content-Type") || "";
+    if (!contentType.includes("application/octet-stream")) {
+      let payload;
+      try { payload = await response.json(); } catch (_) { payload = null; }
+      showToast(payload?.message || t("backup.downloadFailed"), "error");
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(t("backup.downloaded"), "success");
+  } catch (e) {
+    showToast(e.message || t("backup.downloadFailed"), "error");
+  }
+}
+
+async function deleteBackup(filename) {
+  if (!isOwner()) return;
+  if (!confirm(t("backup.confirmDelete", { file: filename }))) return;
+  try {
+    const payload = await apiRequest("api/backup.php", {
+      method: "POST",
+      body: JSON.stringify({ action: "delete", filename }),
+    });
+    showToast(payload.message || t("backup.deleted"), payload.success ? "success" : "error");
+    await loadBackupDashboard();
+  } catch (e) {
+    showToast(e.message, "error");
+  }
+}
+
+function openBackupDetail(filename) {
+  const backup = backupCache.get(filename);
+  const modal = document.querySelector("#backupDetailModal");
+  const body = document.querySelector("#backupDetailBody");
+  if (!modal || !body || !backup) return;
+
+  body.innerHTML = `
+    <div class="audit-detail-grid">
+      <div class="audit-detail-item"><span class="audit-detail-label">${t("backup.detailName")}</span><span class="audit-detail-value backup-detail-name">${escapeHtml(backup.filename)}</span></div>
+      <div class="audit-detail-item"><span class="audit-detail-label">${t("backup.thType")}</span><span class="audit-detail-value">${t("backup.type." + backup.type)}</span></div>
+      <div class="audit-detail-item"><span class="audit-detail-label">${t("backup.thDate")}</span><span class="audit-detail-value">${formatBackupDate(backup.created_at)}</span></div>
+      <div class="audit-detail-item"><span class="audit-detail-label">${t("backup.thSize")}</span><span class="audit-detail-value">${escapeHtml(backup.size_human || "0 B")}</span></div>
+      <div class="audit-detail-item"><span class="audit-detail-label">${t("backup.thStatus")}</span><span class="audit-detail-value">${t("backup.status." + backup.status)}</span></div>
+      <div class="audit-detail-item"><span class="audit-detail-label">${t("backup.thCreator")}</span><span class="audit-detail-value">${t("backup.system")}</span></div>
+    </div>
+    <div class="backup-detail-note">${t("backup.detailNote")}</div>
+  `;
+
+  backupDetailCurrentFile = filename;
+  modal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+let backupDetailCurrentFile = null;
+
+function closeBackupDetail() {
+  const modal = document.querySelector("#backupDetailModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+  }
+  backupDetailCurrentFile = null;
+}
+
+async function validateBackup(filename) {
+  if (!isOwner()) return;
+  try {
+    const payload = await apiRequest("api/backup.php", {
+      method: "POST",
+      body: JSON.stringify({ action: "validate", filename }),
+    });
+    const v = payload.validation || {};
+    showToast(v.valid ? `${t("backup.valid")} (${v.size_human})` : `${t("backup.invalid")}: ${v.detail}`, v.valid ? "success" : "error");
+  } catch (e) {
+    showToast(e.message, "error");
+  }
+}
+
+async function saveRetention() {
+  if (!isOwner()) return;
+  const settings = {
+    keep_daily: parseInt(document.querySelector("#retentionDaily")?.value || "7", 10) || 0,
+    keep_weekly: parseInt(document.querySelector("#retentionWeekly")?.value || "4", 10) || 0,
+    keep_monthly: parseInt(document.querySelector("#retentionMonthly")?.value || "12", 10) || 0,
+    keep_full: parseInt(document.querySelector("#retentionFull")?.value || "3", 10) || 0,
+  };
+  try {
+    const payload = await apiRequest("api/backup.php", {
+      method: "POST",
+      body: JSON.stringify({ action: "retention", settings }),
+    });
+    showToast(payload.message || t("backup.retentionSaved"), payload.success ? "success" : "error");
+    if (payload.success) renderBackupRetention(payload.settings || settings);
+  } catch (e) {
+    showToast(e.message, "error");
+  }
+}
+
+async function runCleanup() {
+  if (!isOwner()) return;
+  if (!confirm(t("backup.confirmCleanup"))) return;
+  try {
+    const payload = await apiRequest("api/backup.php", {
+      method: "POST",
+      body: JSON.stringify({ action: "cleanup" }),
+    });
+    const deleted = payload.result?.deleted?.length || 0;
+    showToast(deleted ? `${t("backup.cleanupDone")}: ${deleted}` : t("backup.cleanupNothing"), deleted ? "success" : "warning");
+    await loadBackupDashboard();
+  } catch (e) {
+    showToast(e.message, "error");
+  }
+}
+
+let restoreFilename = null;
+
+function openRestoreModal(filename) {
+  const backup = backupCache.get(filename);
+  const modal = document.querySelector("#restoreModal");
+  const details = document.querySelector("#restoreDetails");
+  if (!modal || !backup) return;
+
+  restoreFilename = filename;
+
+  details.innerHTML = `
+    <div class="restore-detail-row"><span>${t("backup.currentDb")}</span><strong>Mpeli Outfit Store Production</strong></div>
+    <div class="restore-detail-row"><span>${t("backup.restoring")}</span><strong>${escapeHtml(filename)}</strong></div>
+    <div class="restore-detail-row"><span>${t("backup.thSize")}</span><strong>${escapeHtml(backup.size_human || "0 B")}</strong></div>
+  `;
+
+  document.querySelector("#restoreConfirmCheck1").checked = false;
+  document.querySelector("#restoreStep2Btn").disabled = true;
+  document.querySelector("#restoreMessage").textContent = "";
+
+  modal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeRestoreModal() {
+  const modal = document.querySelector("#restoreModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+  }
+  restoreFilename = null;
+}
+
+async function confirmRestore() {
+  const btn = document.querySelector("#restoreStep2Btn");
+  if (!restoreFilename || !btn || btn.disabled || backupBusy) return;
+
+  const check1 = document.querySelector("#restoreConfirmCheck1");
+  if (!check1.checked) {
+    document.querySelector("#restoreMessage").textContent = t("backup.requireConfirm");
+    return;
+  }
+
+  if (restoreFilename && !isOwner()) return;
+
+  backupBusy = true;
+  btn.disabled = true;
+  btn.classList.add("btn-loading");
+
+  const msgEl = document.querySelector("#restoreMessage");
+  if (msgEl) msgEl.textContent = t("backup.restoringNow");
+
+  try {
+    const payload = await apiRequest("api/backup.php", {
+      method: "POST",
+      body: JSON.stringify({ action: "restore", filename: restoreFilename, confirmed: true }),
+    });
+    if (payload.success) {
+      msgEl.textContent = payload.message || t("backup.restoreSuccess");
+      showToast(t("backup.restoreSuccess"), "success");
+      setTimeout(() => {
+        closeRestoreModal();
+        loadBackupDashboard();
+      }, 1500);
+    } else {
+      msgEl.textContent = payload.message || t("backup.restoreFailed");
+      showToast(t("backup.restoreFailed"), "error");
+    }
+  } catch (e) {
+    if (msgEl) msgEl.textContent = e.message;
+    showToast(e.message || t("backup.restoreFailed"), "error");
+  } finally {
+    backupBusy = false;
+    btn.classList.remove("btn-loading");
+  }
+}
+
+function bindBackupEvents() {
+  document.querySelector("#backupRefreshBtn")?.addEventListener("click", loadBackupDashboard);
+
+  document.querySelector("#createDbBackupBtn")?.addEventListener("click", () => createBackup("database"));
+  document.querySelector("#createFilesBackupBtn")?.addEventListener("click", () => createBackup("files"));
+  document.querySelector("#createFullBackupBtn")?.addEventListener("click", () => createBackup("full"));
+
+  document.querySelector("#saveRetentionBtn")?.addEventListener("click", saveRetention);
+  document.querySelector("#runCleanupBtn")?.addEventListener("click", runCleanup);
+
+  const closeDetail = document.querySelector("#backupDetailClose");
+  const closeDetail2 = document.querySelector("#backupDetailCloseBtn");
+  if (closeDetail) closeDetail.addEventListener("click", closeBackupDetail);
+  if (closeDetail2) closeDetail2.addEventListener("click", closeBackupDetail);
+
+  const validateBtn = document.querySelector("#backupDetailValidateBtn");
+  if (validateBtn) validateBtn.addEventListener("click", () => {
+    if (backupDetailCurrentFile) validateBackup(backupDetailCurrentFile);
+  });
+
+  document.querySelector("#restoreClose")?.addEventListener("click", closeRestoreModal);
+  document.querySelector("#restoreCancel")?.addEventListener("click", closeRestoreModal);
+  document.querySelector("#restoreConfirmCheck1")?.addEventListener("change", (e) => {
+    const btn = document.querySelector("#restoreStep2Btn");
+    if (btn) btn.disabled = !e.target.checked;
+  });
+  document.querySelector("#restoreStep2Btn")?.addEventListener("click", confirmRestore);
+
+  // Event delegation for backup actions
+  document.addEventListener("click", (e) => {
+    const viewBtn = e.target.closest("[data-backup-view]");
+    if (viewBtn) {
+      const name = viewBtn.dataset.backupView;
+      if (backupCache.has(name)) {
+        openBackupDetail(name);
+      } else {
+        showToast(t("backup.notFound"), "error");
+      }
+      return;
+    }
+
+    const dlBtn = e.target.closest("[data-backup-download]");
+    if (dlBtn) {
+      downloadBackup(dlBtn.dataset.backupDownload);
+      return;
+    }
+
+    const delBtn = e.target.closest("[data-backup-delete]");
+    if (delBtn) {
+      deleteBackup(delBtn.dataset.backupDelete);
+      return;
+    }
+
+    const restBtn = e.target.closest("[data-backup-restore]");
+    if (restBtn) {
+      openRestoreModal(restBtn.dataset.backupRestore);
+    }
+  });
 }
 
 async function refreshAppData() {
@@ -1622,6 +2672,13 @@ document.querySelectorAll(".nav-item").forEach(button => {
     // Load page-specific data immediately
     const page = button.dataset.page;
     rememberPage(page);
+    // Dispose Analytics chart roots when leaving the Analytics page so hidden
+    // charts don't keep animating / leak memory.
+    if (page !== "analytics" && window.MpeliCharts) {
+      ["biSalesTrendChart", "biProfitTrendChart", "biSellerRankingChart", "biProductRankingChart", "biSellerTrendChart", "biProductTrendChart"].forEach(id => {
+        window.MpeliCharts.disposeRoot(document.querySelector("#" + id));
+      });
+    }
     try {
       if (page === "dashboard") await loadDashboard();
       else if (page === "products") { await loadProducts(); await loadPromotions(); }
@@ -1630,7 +2687,10 @@ document.querySelectorAll(".nav-item").forEach(button => {
       else if (page === "expenses") await loadExpenses();
       else if (page === "inventory" && isOwner()) await loadInventory();
       else if (page === "reports") await loadReports();
+      else if (page === "analytics") await initBI();
       else if (page === "users" && isOwner()) await loadUsers();
+      else if (page === "audit" && isOwner()) await loadAuditLog();
+      else if (page === "backup" && isOwner()) await loadBackupDashboard();
       else if (page === "settings" && isOwner()) await loadSettings();
     } catch (e) {
     }
@@ -1723,6 +2783,7 @@ document.querySelector("#logoutButton")?.addEventListener("click", async () => {
   clearCartState();
   forgetLastPage();
   clearCsrfToken();
+  if (window.MpeliCharts) window.MpeliCharts.disposeAll();
   document.querySelector("#loginForm")?.reset();
   document.querySelector("#ownerSetupForm")?.reset();
   document.querySelectorAll("#loginScreen input").forEach(input => { input.value = ""; });
@@ -2800,6 +3861,7 @@ function updateTopbarPageTitle(pageName) {
     sales: "nav.sales",
     expenses: "nav.expenses",
     reports: "nav.reports",
+    analytics: "nav.analytics",
     inventory: "nav.inventory",
     promotions: "nav.promotions",
     users: "nav.users",
@@ -3044,6 +4106,8 @@ function forceLogout(reason) {
   clearCartState();
   forgetLastPage();
   clearCsrfToken();
+  // Dispose all amCharts roots so chart memory is released on logout.
+  if (window.MpeliCharts) window.MpeliCharts.disposeAll();
   document.querySelector("#loginForm")?.reset();
   document.querySelector("#ownerSetupForm")?.reset();
   document.querySelectorAll("#loginScreen input").forEach(input => { input.value = ""; });
@@ -3127,6 +4191,582 @@ function startDashboardAutoRefresh() {
   }, 30000);
 }
 
+// ── BI Analytics ───────────────────────────────────────────────────────────
+
+let biCurrentPeriod = "last_7_days";
+let biStartDate = "";
+let biEndDate = "";
+let biCurrentView = "overview";
+let biSellerSort = "revenue";
+let biProductSort = "revenue";
+let biCurrentSellerId = null;
+let biCurrentProductId = null;
+let biInitialized = false;
+
+async function initBI() {
+  if (!biInitialized) {
+    biInitialized = true;
+    setupBIEvents();
+  }
+  biCurrentPeriod = "last_7_days";
+  setBIPeriodActive("last_7_days");
+  await loadBIView();
+}
+
+function setupBIEvents() {
+  // Period buttons
+  document.querySelectorAll(".bi-period-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const period = btn.dataset.biPeriod;
+      if (period === "custom") {
+        document.querySelector("#biCustomRange")?.classList.toggle("hidden");
+        return;
+      }
+      document.querySelector("#biCustomRange")?.classList.add("hidden");
+      setBIPeriodActive(period);
+      biCurrentPeriod = period;
+      loadBIView();
+    });
+  });
+
+  // Custom range apply
+  document.querySelector("#biApplyCustom")?.addEventListener("click", () => {
+    const s = document.querySelector("#biStartDate")?.value;
+    const e = document.querySelector("#biEndDate")?.value;
+    if (s && e) {
+      biStartDate = s;
+      biEndDate = e;
+      biCurrentPeriod = "custom";
+      setBIPeriodActive("custom");
+      loadBIView();
+    }
+  });
+
+  // View switching (Performance Overview | Performance Breakdown)
+  document.querySelectorAll(".bi-view-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const view = btn.dataset.biView;
+      setBIViewActive(view);
+      biCurrentView = view;
+      loadBIView();
+    });
+  });
+
+  // Seller sort
+  document.querySelectorAll("#biSellerSort .bi-sort-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#biSellerSort .bi-sort-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      biSellerSort = btn.dataset.sort;
+      loadBISellers();
+    });
+  });
+
+  // Product sort
+  document.querySelectorAll("#biProductSort .bi-sort-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#biProductSort .bi-sort-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      biProductSort = btn.dataset.sort;
+      loadBIProducts();
+    });
+  });
+
+  // Seller select for trend
+  document.querySelector("#biSellerSelect")?.addEventListener("change", async (e) => {
+    biCurrentSellerId = e.target.value || null;
+    if (biCurrentSellerId) await loadBISellerTrend(biCurrentSellerId);
+  });
+
+  // Product select for trend
+  document.querySelector("#biProductSelect")?.addEventListener("change", async (e) => {
+    biCurrentProductId = e.target.value || null;
+    if (biCurrentProductId) await loadBIProductTrend(biCurrentProductId);
+  });
+}
+
+function setBIPeriodActive(period) {
+  document.querySelectorAll(".bi-period-btn").forEach(b => b.classList.toggle("active", b.dataset.biPeriod === period));
+}
+
+function setBIViewActive(view) {
+  document.querySelectorAll(".bi-view-btn").forEach(b => b.classList.toggle("active", b.dataset.biView === view));
+  document.querySelectorAll(".bi-view-panel").forEach(p => p.classList.add("hidden"));
+  const panelId = view === "overview" ? "biViewOverview" : "biViewBreakdown";
+  const panel = document.querySelector("#" + panelId);
+  if (panel) panel.classList.remove("hidden");
+}
+
+function biUrl(action, extra = {}) {
+  let url = `api/analytics.php?action=${action}&period=${biCurrentPeriod}`;
+  if (biCurrentPeriod === "custom") {
+    url += `&start_date=${biStartDate}&end_date=${biEndDate}`;
+  }
+  Object.entries(extra).forEach(([k, v]) => { if (v != null) url += `&${k}=${v}`; });
+  return url;
+}
+
+// Safely run a chart renderer into `container`. Guarantees the container is
+// never left on the "Loading…" state: success -> chart, no-data/failure ->
+// a safe empty/error message. Never throws to the caller.
+function renderChartSafe(container, renderFn, opts = {}) {
+  if (!container) return null;
+  if (window.MpeliCharts) window.MpeliCharts.showChartLoading(container, opts.loading || "Loading…");
+  try {
+    const result = renderFn();
+    if (result === null && window.MpeliCharts) {
+      window.MpeliCharts.showChartEmpty(container, opts.empty || "No data available for the selected period.");
+    }
+    return result;
+  } catch (e) {
+    if (window.MpeliCharts) window.MpeliCharts.showChartError(container, opts.error || "Unable to render chart.");
+    return null;
+  }
+}
+
+// Fetch a BI payload, guaranteeing a chart container is never stuck on
+// "Loading…" if the request fails. Returns the payload or null on error.
+async function biRequestSafe(container, url, opts = {}) {
+  if (container && window.MpeliCharts) window.MpeliCharts.showChartLoading(container, opts.loading || "Loading…");
+  try {
+    return await apiRequest(url);
+  } catch (e) {
+    if (container && window.MpeliCharts) window.MpeliCharts.showChartError(container, opts.error || "Unable to load chart data.");
+    return null;
+  }
+}
+
+async function loadBIView() {
+  try {
+    if (biCurrentView === "overview") {
+      await loadBIOverview();
+      await loadBISalesTrend();
+      await loadBIProfitTrend();
+      if (isOwner()) await loadBIExpenses();
+      await loadBIDiscounts();
+    } else {
+      await loadBISellers();
+      await loadBIProducts();
+    }
+  } catch (e) {
+    showToast(e.message, "error");
+  }
+}
+
+// ── Overview ───────────────────────────────────────────────────────────────
+
+async function loadBIOverview() {
+  const payload = await apiRequest(biUrl("dashboard"));
+  const kpis = payload.kpis;
+  const comp = payload.comparison?.comparison || {};
+
+  setText("#biRevenue", money(kpis.revenue));
+  setText("#biGrossProfit", money(kpis.gross_profit));
+  setText("#biExpenses", money(kpis.expenses));
+  setText("#biNetProfit", money(kpis.net_profit));
+  setText("#biSalesCount", kpis.sales_count);
+  setText("#biItemsSold", kpis.items_sold);
+  setText("#biAvgOrder", money(kpis.avg_order_value));
+  setText("#biProfitMargin", kpis.profit_margin + "%");
+  setText("#biProductsSold", kpis.distinct_products_sold);
+  setText("#biActiveSellers", kpis.active_sellers);
+
+  setComparison("#biRevenueCompare", comp.revenue);
+  setComparison("#biGrossProfitCompare", comp.gross_profit);
+  setComparison("#biExpensesCompare", comp.expenses);
+  setComparison("#biNetProfitCompare", comp.net_profit);
+  setComparison("#biSalesCountCompare", comp.sales_count);
+  setComparison("#biItemsSoldCompare", comp.items_sold);
+
+  // Daily summary
+  if (payload.daily_summary) {
+    const ds = payload.daily_summary;
+    const dsKpis = ds.kpis;
+    setText("#biDailyRevenue", money(dsKpis.revenue));
+    setText("#biDailyGrossProfit", money(dsKpis.gross_profit));
+    setText("#biDailyExpenses", money(dsKpis.expenses));
+    setText("#biDailyNetProfit", money(dsKpis.net_profit));
+    setText("#biDailyTopProduct", ds.top_product?.product_name || "—");
+    setText("#biDailyTopSeller", ds.top_seller?.seller_name || "—");
+  }
+
+  // Insights
+  const insightsEl = document.querySelector("#biInsights");
+  if (insightsEl && payload.insights) {
+    if (payload.insights.length === 0) {
+      insightsEl.innerHTML = "";
+    } else {
+      const iconMap = { positive: "bi-arrow-up-right", negative: "bi-arrow-down-right", warning: "bi-exclamation-triangle", info: "bi-info-circle" };
+      insightsEl.innerHTML = payload.insights.map(i =>
+        `<div class="bi-insight ${i.type}"><i class="bi ${iconMap[i.type] || 'bi-info-circle'} bi-insight-icon"></i> <span>${escapeHtml(i.text)}</span></div>`
+      ).join("");
+    }
+  }
+}
+
+// ── Sales Trend ────────────────────────────────────────────────────────────
+
+async function loadBISalesTrend() {
+  const container = document.querySelector("#biSalesTrendChart");
+  const payload = await biRequestSafe(container, biUrl("sales_trend"));
+  if (!payload) return;
+  const trend = payload.trend || [];
+  const rangeLabel = biPeriodLabel(payload.period, payload.start_date, payload.end_date);
+  setText("#biSalesTrendRange", rangeLabel);
+
+  if (!trend.length) {
+    if (window.MpeliCharts) window.MpeliCharts.disposeRoot(container);
+    if (container) container.innerHTML = `<div class="bi-empty-state"><i class="bi bi-bar-chart-line"></i><p>${t("analytics.noData")}</p></div>`;
+    return;
+  }
+  renderChartSafe(container, () => {
+    if (window.MpeliBusinessCharts) return window.MpeliBusinessCharts.renderSalesTrend(container, trend);
+    let out = null;
+    window.MpeliCharts?.onReady(() => { if (window.MpeliBusinessCharts) out = window.MpeliBusinessCharts.renderSalesTrend(container, trend); });
+    return out;
+  }, { error: "Unable to render sales trend chart." });
+}
+
+// ── Profit Trend ───────────────────────────────────────────────────────────
+
+async function loadBIProfitTrend() {
+  const container = document.querySelector("#biProfitTrendChart");
+  const payload = await biRequestSafe(container, biUrl("profit_trend"));
+  if (!payload) return;
+  const trend = payload.trend || [];
+  const rangeLabel = biPeriodLabel(payload.period, payload.start_date, payload.end_date);
+  setText("#biProfitTrendRange", rangeLabel);
+
+  if (!trend.length) {
+    if (window.MpeliCharts) window.MpeliCharts.disposeRoot(container);
+    if (container) container.innerHTML = `<div class="bi-empty-state"><i class="bi bi-graph-up"></i><p>${t("analytics.noData")}</p></div>`;
+    return;
+  }
+  renderChartSafe(container, () => {
+    if (window.MpeliBusinessCharts) return window.MpeliBusinessCharts.renderProfitTrend(container, trend);
+    let out = null;
+    window.MpeliCharts?.onReady(() => { if (window.MpeliBusinessCharts) out = window.MpeliBusinessCharts.renderProfitTrend(container, trend); });
+    return out;
+  }, { error: "Unable to render profit trend chart." });
+}
+
+// ── Seller Performance ─────────────────────────────────────────────────────
+
+async function loadBISellers() {
+  const rankingContainer = document.querySelector("#biSellerRankingChart");
+  const payload = await biRequestSafe(rankingContainer, biUrl("seller_performance"));
+  if (!payload) return;
+  let sellers = payload.sellers || [];
+
+  // Sort
+  if (biSellerSort === "profit") sellers.sort((a, b) => Number(b.gross_profit) - Number(a.gross_profit));
+  else if (biSellerSort === "sales") sellers.sort((a, b) => Number(b.transactions) - Number(a.transactions));
+  else if (biSellerSort === "items") sellers.sort((a, b) => Number(b.items_sold) - Number(a.items_sold));
+  else sellers.sort((a, b) => Number(b.revenue) - Number(a.revenue));
+
+  // Populate select
+  const select = document.querySelector("#biSellerSelect");
+  if (select) {
+    const currentVal = select.value;
+    select.innerHTML = `<option value="">${t("analytics.selectSeller")}</option>` +
+      sellers.map(s => `<option value="${s.seller_id}">${escapeHtml(s.seller_name)}</option>`).join("");
+    if (currentVal) select.value = currentVal;
+  }
+
+  const tbody = document.querySelector("#biSellerBody");
+  if (!tbody) return;
+
+  if (!sellers.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="align-right">${t("analytics.noData")}</td></tr>`;
+    const rankingContainer = document.querySelector("#biSellerRankingChart");
+    if (window.MpeliCharts) window.MpeliCharts.disposeRoot(rankingContainer);
+    if (rankingContainer) rankingContainer.innerHTML = `<div class="bi-empty-state"><i class="bi bi-people"></i><p>${t("analytics.noData")}</p></div>`;
+    return;
+  }
+
+  // Render seller ranking bar chart (metric depends on the active sort).
+  const sortingMetric = biSellerSort === "profit" ? "gross_profit"
+    : biSellerSort === "sales" ? "transactions"
+    : biSellerSort === "items" ? "items_sold"
+    : "revenue";
+  renderChartSafe(rankingContainer, () => {
+    if (window.MpeliBusinessCharts) {
+      return window.MpeliBusinessCharts.renderSellerRanking(rankingContainer, sellers, {
+        nameField: "seller_name",
+        valueField: sortingMetric,
+        name: biSellerSort === "revenue" ? "Revenue" : (biSellerSort === "profit" ? "Profit" : (biSellerSort === "sales" ? "Sales" : "Items Sold")),
+        color: sortingMetric === "gross_profit" ? window.MpeliCharts?.cssVar("--success", "#2d7c59") : window.MpeliCharts?.cssVar("--gold", "#c9a24e"),
+        limit: 10,
+        emptyMessage: t("analytics.noData"),
+      });
+    }
+    return null;
+  }, { error: "Unable to render seller ranking." });
+
+  const rankIcons = ["", "🥇", "🥈", "🥉"];
+  tbody.innerHTML = sellers.map((s, i) => {
+    const marginClass = s.profit_margin >= 30 ? "margin-good" : (s.profit_margin < 15 ? "margin-bad" : "margin-neutral");
+    return `<tr>
+      <td class="rank-cell ${i < 3 ? 'rank-' + (i + 1) : ''}">${rankIcons[i] || (i + 1)}</td>
+      <td class="seller-name-cell">${escapeHtml(s.seller_name)}</td>
+      <td class="align-right">${s.transactions}</td>
+      <td class="align-right">${s.items_sold}</td>
+      <td class="align-right">${money(s.revenue)}</td>
+      <td class="align-right">${money(s.gross_profit)}</td>
+      <td class="align-right"><span class="${marginClass}">${s.profit_margin}%</span></td>
+      <td class="align-right">${money(s.avg_order_value)}</td>
+      <td class="align-right">${money(s.discount_amount)}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadBISellerTrend(sellerId) {
+  const container = document.querySelector("#biSellerTrendChart");
+  const payload = await biRequestSafe(container, biUrl("seller_trend", { seller_id: sellerId }));
+  if (!payload) return;
+  const trend = payload.trend || [];
+
+  if (!trend.length) {
+    if (window.MpeliCharts) window.MpeliCharts.disposeRoot(container);
+    if (container) container.innerHTML = `<div class="bi-empty-state"><i class="bi bi-person-line-dotted"></i><p>${t("analytics.noData")}</p></div>`;
+    return;
+  }
+
+  renderChartSafe(container, () => {
+    if (window.MpeliBusinessCharts) return window.MpeliBusinessCharts.renderSellerTrend(container, trend);
+    let out = null;
+    window.MpeliCharts?.onReady(() => { if (window.MpeliBusinessCharts) out = window.MpeliBusinessCharts.renderSellerTrend(container, trend); });
+    return out;
+  }, { error: "Unable to render seller trend chart." });
+}
+
+// ── Product Performance ────────────────────────────────────────────────────
+
+async function loadBIProducts() {
+  const productRankingContainer = document.querySelector("#biProductRankingChart");
+  if (productRankingContainer && window.MpeliCharts) window.MpeliCharts.showChartLoading(productRankingContainer, "Loading…");
+  let rankingsPayload = null;
+  let categoriesPayload = null;
+  try {
+    [rankingsPayload, categoriesPayload] = await Promise.all([
+      apiRequest(biUrl("product_rankings", { sort: biProductSort, limit: 15 })),
+      apiRequest(biUrl("product_categories")),
+    ]);
+  } catch (e) {
+    if (productRankingContainer && window.MpeliCharts) window.MpeliCharts.showChartError(productRankingContainer, "Unable to load product data.");
+    return;
+  }
+
+  let products = (rankingsPayload && rankingsPayload.products) || [];
+
+  const tbody = document.querySelector("#biProductBody");
+  if (tbody) {
+    if (!products.length) {
+      tbody.innerHTML = `<tr><td colspan="9" class="align-right">${t("analytics.noData")}</td></tr>`;
+    } else {
+      tbody.innerHTML = products.map((p, i) => {
+        const marginClass = p.profit_margin >= 30 ? "margin-good" : (p.profit_margin < 15 ? "margin-bad" : "margin-neutral");
+        const stockBadge = p.stock_status === "out_of_stock" ? "out" : (p.stock_status === "low_stock" ? "low" : "in");
+        return `<tr>
+          <td class="rank-cell ${i < 3 ? 'rank-' + (i + 1) : ''}">${i + 1}</td>
+          <td class="product-name-cell">${escapeHtml(p.product_name)}</td>
+          <td>${escapeHtml(p.category_name || "")}</td>
+          <td class="align-right">${p.quantity_sold}</td>
+          <td class="align-right">${money(p.revenue)}</td>
+          <td class="align-right">${money(p.gross_profit)}</td>
+          <td class="align-right"><span class="${marginClass}">${p.profit_margin}%</span></td>
+          <td class="align-right">${money(p.avg_selling_price)}</td>
+          <td class="align-right"><span class="stock-badge-sm ${stockBadge}">${p.current_stock}</span></td>
+        </tr>`;
+      }).join("");
+    }
+  }
+
+  // Populate product select
+  const allProductsPayload = await apiRequest(biUrl("product_performance"));
+  const select = document.querySelector("#biProductSelect");
+  if (select) {
+    const currentVal = select.value;
+    select.innerHTML = `<option value="">${t("analytics.selectProduct")}</option>` +
+      (allProductsPayload.products || []).map(p => `<option value="${p.product_id}">${escapeHtml(p.product_name)}</option>`).join("");
+    if (currentVal) select.value = currentVal;
+  }
+
+  // Render product ranking bar chart.
+  if (window.MpeliCharts) window.MpeliCharts.disposeRoot(productRankingContainer);
+  if (!products.length) {
+    if (productRankingContainer) productRankingContainer.innerHTML = `<div class="bi-empty-state"><i class="bi bi-box-seam"></i><p>${t("analytics.noData")}</p></div>`;
+  } else if (window.MpeliBusinessCharts) {
+    const productMetric = biProductSort === "profit" ? "gross_profit"
+      : biProductSort === "quantity" ? "quantity_sold"
+      : "revenue";
+    window.MpeliBusinessCharts.renderProductRanking(productRankingContainer, products, {
+      nameField: "product_name",
+      valueField: productMetric,
+      name: biProductSort === "revenue" ? "Revenue" : (biProductSort === "profit" ? "Profit" : "Quantity Sold"),
+      color: productMetric === "gross_profit" ? window.MpeliCharts?.cssVar("--success", "#2d7c59") : window.MpeliCharts?.cssVar("--gold", "#c9a24e"),
+      limit: 12,
+      emptyMessage: t("analytics.noData"),
+    });
+  }
+
+  // Product categories
+  renderProductCategories(categoriesPayload.categories || {});
+}
+
+function renderProductCategories(categories) {
+  const container = document.querySelector("#biProductCategories");
+  if (!container) return;
+
+  const cards = [];
+  if (categories.best_sellers?.length) {
+    cards.push(`<div class="bi-kpi-card"><span class="bi-kpi-label">${t("analytics.bestSellers")}</span><span class="bi-kpi-value" style="font-size:14px; text-align:left; line-height:1.6">${categories.best_sellers.map(p => escapeHtml(p.product_name)).join(", ")}</span></div>`);
+  }
+  if (categories.slow_moving?.length) {
+    cards.push(`<div class="bi-kpi-card"><span class="bi-kpi-label">${t("analytics.slowMoving")}</span><span class="bi-kpi-value" style="font-size:14px; text-align:left; line-height:1.6">${categories.slow_moving.map(p => escapeHtml(p.product_name)).join(", ")}</span></div>`);
+  }
+  if (categories.out_of_stock?.length) {
+    cards.push(`<div class="bi-kpi-card"><span class="bi-kpi-label">${t("analytics.outOfStock")}</span><span class="bi-kpi-value danger" style="font-size:14px; text-align:left; line-height:1.6">${categories.out_of_stock.map(p => escapeHtml(p.product_name)).join(", ")}</span></div>`);
+  }
+  if (categories.low_stock?.length) {
+    cards.push(`<div class="bi-kpi-card"><span class="bi-kpi-label">${t("analytics.lowStock")}</span><span class="bi-kpi-value" style="font-size:14px; text-align:left; line-height:1.6; color:var(--text-secondary)">${categories.low_stock.map(p => escapeHtml(p.product_name)).join(", ")}</span></div>`);
+  }
+  container.innerHTML = cards.join("") || `<div class="bi-kpi-card"><span class="bi-kpi-label">${t("analytics.noData")}</span></div>`;
+}
+
+async function loadBIProductTrend(productId) {
+  const container = document.querySelector("#biProductTrendChart");
+  const payload = await biRequestSafe(container, biUrl("product_trend", { product_id: productId }));
+  if (!payload) return;
+  const trend = payload.trend || [];
+
+  if (!trend.length) {
+    if (window.MpeliCharts) window.MpeliCharts.disposeRoot(container);
+    if (container) container.innerHTML = `<div class="bi-empty-state"><i class="bi bi-box-seam"></i><p>${t("analytics.noData")}</p></div>`;
+    return;
+  }
+
+  renderChartSafe(container, () => {
+    if (window.MpeliBusinessCharts) return window.MpeliBusinessCharts.renderProductTrend(container, trend);
+    let out = null;
+    window.MpeliCharts?.onReady(() => { if (window.MpeliBusinessCharts) out = window.MpeliBusinessCharts.renderProductTrend(container, trend); });
+    return out;
+  }, { error: "Unable to render product trend chart." });
+}
+
+// ── Expense Impact ─────────────────────────────────────────────────────────
+
+async function loadBIExpenses() {
+  const payload = await apiRequest(biUrl("expense_impact"));
+  const impact = payload.impact || {};
+
+  setText("#biExpRevenue", money(impact.revenue));
+  setText("#biExpGrossProfit", money(impact.gross_profit));
+  setText("#biExpExpenses", money(impact.expenses));
+  setText("#biExpNetProfit", money(impact.net_profit));
+
+  const tbody = document.querySelector("#biExpenseBreakdownBody");
+  if (!tbody) return;
+
+  const breakdown = impact.expense_breakdown || [];
+  if (!breakdown.length) {
+    tbody.innerHTML = `<tr><td colspan="3" class="align-right">${t("analytics.noData")}</td></tr>`;
+    return;
+  }
+
+  const totalExp = Number(impact.expenses) || 1;
+  tbody.innerHTML = breakdown.map(b => {
+    const pct = totalExp > 0 ? ((Number(b.total) / totalExp) * 100).toFixed(1) : "0";
+    return `<tr>
+      <td>${escapeHtml(t("expenseCategory." + b.category.toLowerCase()) || b.category)}</td>
+      <td class="align-right">${money(b.total)}</td>
+      <td class="align-right">${pct}%</td>
+    </tr>`;
+  }).join("");
+}
+
+// ── Discount Analysis ──────────────────────────────────────────────────────
+
+async function loadBIDiscounts() {
+  const [discountsPayload, promosPayload] = await Promise.all([
+    apiRequest(biUrl("discount_analysis")),
+    apiRequest(biUrl("promotion_performance")),
+  ]);
+
+  const d = discountsPayload.discounts || {};
+  setText("#biDiscountTotal", money(d.total_discount_amount));
+  setText("#biDiscountedItems", d.discounted_items);
+  setText("#biDiscountRate", d.discount_percentage + "%");
+  setText("#biDiscountedSales", d.discounted_sales);
+
+  const tbody = document.querySelector("#biPromoBody");
+  if (!tbody) return;
+
+  const promos = promosPayload.promotions || [];
+  if (!promos.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="align-right">${t("analytics.noData")}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = promos.map(p => `<tr>
+    <td>${escapeHtml(p.promotion_name)}</td>
+    <td class="align-right">${p.percentage}%</td>
+    <td class="align-right">${p.sales_count}</td>
+    <td class="align-right">${p.items_sold}</td>
+    <td class="align-right">${money(p.revenue)}</td>
+    <td class="align-right">${money(p.gross_profit)}</td>
+    <td class="align-right">${money(p.discount_amount)}</td>
+  </tr>`).join("");
+}
+
+// ── BI Helpers ─────────────────────────────────────────────────────────────
+
+function setText(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) el.textContent = value;
+}
+
+function setComparison(selector, comp) {
+  const el = document.querySelector(selector);
+  if (!el || !comp) { if (el) el.textContent = ""; return; }
+  if (!comp.has_data || comp.change === 0) {
+    el.textContent = "";
+    el.className = "bi-kpi-sub";
+    return;
+  }
+  const arrow = comp.direction === "up" ? "▲" : "▼";
+  const cls = comp.direction === "up" ? "positive" : "negative";
+  el.textContent = `${arrow} ${Math.abs(comp.change)}%`;
+  el.className = "bi-kpi-sub " + cls;
+}
+
+function shortDateLabel(dateStr) {
+  if (!dateStr) return "";
+  const parts = String(dateStr).split("-");
+  if (parts.length < 2) return dateStr;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const m = parseInt(parts[1], 10);
+  if (parts.length === 3) return `${months[m - 1]} ${parseInt(parts[2], 10)}`;
+  if (parts.length === 2) return `${months[m - 1]} ${parts[0].slice(2)}`;
+  return dateStr;
+}
+
+function biPeriodLabel(period, startDate, endDate) {
+  const labels = {
+    today: t("common.today"),
+    yesterday: t("analytics.yesterday"),
+    last_7_days: t("analytics.last7Days"),
+    last_30_days: t("analytics.last30Days"),
+    this_week: t("analytics.thisWeek"),
+    last_week: t("analytics.lastWeek"),
+    this_month: t("analytics.thisMonth"),
+    last_month: t("analytics.lastMonth"),
+    this_year: t("analytics.thisYear"),
+    custom: `${startDate} – ${endDate}`,
+  };
+  return labels[period] || period;
+}
+
 async function init() {
   try {
     await loadTranslations(currentLanguage);
@@ -3165,6 +4805,8 @@ async function init() {
     if (mePayload.authenticated && mePayload.user) {
       currentUser = mePayload.user;
       showApp();
+      bindAuditEvents();
+      bindBackupEvents();
       await refreshAppData();
       const lastPage = getLastPage();
       if (lastPage && lastPage !== "dashboard") {

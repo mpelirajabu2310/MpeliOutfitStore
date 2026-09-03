@@ -23,7 +23,10 @@ if (strlen($username) > 50 || !preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
 // IP-based rate limiting: 5 attempts per 5 minutes
 if (!check_rate_limit('login', 5, 300)) {
     $ip = get_client_ip();
-    log_activity(0, 'login_blocked', "IP: $ip — too many attempts", 'blocked');
+    audit_log(0, 'login_blocked', "IP: $ip — too many attempts", 'blocked', [
+        'module' => 'auth',
+        'description' => "IP: {$ip} blocked due to too many login attempts",
+    ]);
     respond(['success' => false, 'message' => 'Too many login attempts. Try again in 5 minutes.'], 429);
 }
 
@@ -38,7 +41,10 @@ $user = $stmt->fetch();
 
 // Use constant-time comparison for password hash verification
 if (!$user || !password_verify($password, (string)$user['password_hash'])) {
-    log_activity($user['id'] ?? 0, 'login_failed', "Username: $username", 'failure');
+    audit_log($user['id'] ?? 0, 'login_failed', "Username: $username", 'failure', [
+        'module' => 'auth',
+        'description' => "Failed login attempt for username: {$username}",
+    ]);
     respond(['success' => false, 'message' => 'Invalid username or password.'], 401);
 }
 
@@ -50,7 +56,10 @@ if ($user['role'] !== 'OWNER') {
     require_once __DIR__ . '/../services/SystemHealthService.php';
     $healthService = new SystemHealthService();
     if ($healthService->isMaintenanceMode()) {
-        log_activity((int)$user['id'], 'login_blocked_maintenance', "Role: {$user['role']}");
+        audit_log((int)$user['id'], 'login_blocked_maintenance', "Role: {$user['role']}", 'blocked', [
+            'module' => 'auth',
+            'description' => "Login blocked: system in maintenance mode (role: {$user['role']})",
+        ]);
         respond(['success' => false, 'message' => 'System is under maintenance. Please try again later.'], 503);
     }
 }
@@ -62,7 +71,12 @@ $_SESSION['last_activity'] = time();
 $_SESSION['login_ip'] = get_client_ip();
 session_regenerate_id(true);
 
-log_activity((int)$user['id'], 'login_success', "Role: {$user['role']}");
+audit_log((int)$user['id'], 'login_success', "Role: {$user['role']}", 'success', [
+    'module' => 'auth',
+    'description' => "User {$user['name']} ({$user['role']}) logged in successfully",
+    'entity_type' => 'user',
+    'entity_id' => (int)$user['id'],
+]);
 
 $update = $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id');
 $update->execute(['id' => $user['id']]);

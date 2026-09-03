@@ -9,7 +9,7 @@ header('X-Frame-Options: DENY');
 header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';");
 
 $timestamp = time();
 ?><!DOCTYPE html>
@@ -136,8 +136,11 @@ $timestamp = time();
         <button class="nav-item" data-page="sales"><i class="bi bi-cart-check-fill"></i> <span data-i18n="nav.sales">Sales POS</span></button>
         <button class="nav-item owner-only" data-page="inventory"><i class="bi bi-clipboard-data-fill"></i> <span data-i18n="nav.inventory">Inventory</span></button>
         <button class="nav-item" data-page="reports"><i class="bi bi-bar-chart-line-fill"></i> <span data-i18n="nav.reports">Reports</span></button>
+        <button class="nav-item owner-only" data-page="analytics"><i class="bi bi-graph-up-arrow"></i> <span data-i18n="nav.analytics">Analytics</span></button>
         <button class="nav-item" data-page="expenses"><i class="bi bi-wallet2"></i> <span data-i18n="nav.expenses">Expenses</span></button>
         <button class="nav-item owner-only" data-page="users"><i class="bi bi-people-fill"></i> <span data-i18n="nav.users">Users</span></button>
+        <button class="nav-item owner-only" data-page="audit"><i class="bi bi-journal-text"></i> <span data-i18n="nav.audit">Audit Logs</span></button>
+        <button class="nav-item owner-only" data-page="backup"><i class="bi bi-shield-check"></i> <span data-i18n="nav.backup">Backup</span></button>
         <button class="nav-item owner-only" data-page="settings"><i class="bi bi-gear-fill"></i> <span data-i18n="nav.settings">Settings</span></button>
       </nav>
       <div class="sidebar-feature owner-only">
@@ -435,6 +438,239 @@ $timestamp = time();
           <div class="best-sellers" id="bestSellers"><span data-i18n="dashboard.noChartData">No sales data available yet.</span></div>
         </article>
       </main>
+      <main class="page owner-only" id="analytics">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow" data-i18n="analytics.eyebrow">Business Intelligence</p>
+            <h2 data-i18n="nav.analytics">Analytics</h2>
+          </div>
+        </div>
+
+        <div class="bi-date-filter" id="biDateFilter">
+          <label data-i18n="analytics.period">Period:</label>
+          <button class="bi-period-btn active" data-bi-period="today" data-i18n="common.today">Today</button>
+          <button class="bi-period-btn" data-bi-period="yesterday" data-i18n="analytics.yesterday">Yesterday</button>
+          <button class="bi-period-btn" data-bi-period="last_7_days" data-i18n="analytics.last7Days">Last 7 Days</button>
+          <button class="bi-period-btn" data-bi-period="last_30_days" data-i18n="analytics.last30Days">Last 30 Days</button>
+          <button class="bi-period-btn" data-bi-period="this_week" data-i18n="analytics.thisWeek">This Week</button>
+          <button class="bi-period-btn" data-bi-period="last_week" data-i18n="analytics.lastWeek">Last Week</button>
+          <button class="bi-period-btn" data-bi-period="this_month" data-i18n="analytics.thisMonth">This Month</button>
+          <button class="bi-period-btn" data-bi-period="last_month" data-i18n="analytics.lastMonth">Last Month</button>
+          <button class="bi-period-btn" data-bi-period="this_year" data-i18n="analytics.thisYear">This Year</button>
+          <button class="bi-period-btn" data-bi-period="custom" data-i18n="analytics.custom">Custom</button>
+          <div class="bi-custom-range hidden" id="biCustomRange">
+            <input type="date" id="biStartDate" />
+            <input type="date" id="biEndDate" />
+            <button class="ghost-button" id="biApplyCustom" data-i18n="analytics.apply">Apply</button>
+          </div>
+        </div>
+
+        <!-- View Switcher -->
+        <div class="bi-view-switcher" role="tablist" aria-label="Business analysis views">
+          <button type="button" class="bi-view-btn active" data-bi-view="overview" role="tab" aria-selected="true" aria-controls="biViewOverview" data-i18n="bi.viewOverview">Performance Overview</button>
+          <button type="button" class="bi-view-btn" data-bi-view="breakdown" role="tab" aria-selected="false" aria-controls="biViewBreakdown" data-i18n="bi.viewBreakdown">Performance Breakdown</button>
+        </div>
+
+        <!-- ═══════════ VIEW 1 — PERFORMANCE OVERVIEW ═══════════ -->
+        <div class="bi-view-panel" id="biViewOverview" role="tabpanel">
+          <div class="bi-kpi-grid" id="biKpiGrid">
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.revenue">Revenue</span><span class="bi-kpi-value" id="biRevenue">TSH 0</span><span class="bi-kpi-sub" id="biRevenueCompare"></span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.grossProfit">Gross Profit</span><span class="bi-kpi-value gold" id="biGrossProfit">TSH 0</span><span class="bi-kpi-sub" id="biGrossProfitCompare"></span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.expenses">Expenses</span><span class="bi-kpi-value danger" id="biExpenses">TSH 0</span><span class="bi-kpi-sub" id="biExpensesCompare"></span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.netProfit">Net Profit</span><span class="bi-kpi-value success" id="biNetProfit">TSH 0</span><span class="bi-kpi-sub" id="biNetProfitCompare"></span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.numberOfSales">Number of Sales</span><span class="bi-kpi-value" id="biSalesCount">0</span><span class="bi-kpi-sub" id="biSalesCountCompare"></span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.itemsSold">Items Sold</span><span class="bi-kpi-value" id="biItemsSold">0</span><span class="bi-kpi-sub" id="biItemsSoldCompare"></span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.avgOrderValue">Avg Order Value</span><span class="bi-kpi-value" id="biAvgOrder">TSH 0</span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.profitMargin">Profit Margin</span><span class="bi-kpi-value" id="biProfitMargin">0%</span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.productsSold">Products Sold</span><span class="bi-kpi-value" id="biProductsSold">0</span></div>
+            <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.activeSellers">Active Sellers</span><span class="bi-kpi-value" id="biActiveSellers">0</span></div>
+          </div>
+
+          <div class="bi-insights" id="biInsights"></div>
+
+          <!-- Daily Summary (Owner) -->
+          <div class="bi-subsection owner-only" id="biDailySummarySection">
+            <h3 class="bi-subsection-title" data-i18n="analytics.dailySummary">Today's Summary</h3>
+            <div class="bi-expense-flow">
+              <div class="bi-flow-card flow-revenue"><div class="flow-label" data-i18n="analytics.revenue">Revenue</div><div class="flow-value" id="biDailyRevenue">TSH 0</div></div>
+              <div class="bi-flow-card flow-gross"><div class="flow-label" data-i18n="analytics.grossProfit">Gross Profit</div><div class="flow-value" id="biDailyGrossProfit">TSH 0</div></div>
+              <div class="bi-flow-card flow-expense"><div class="flow-label" data-i18n="analytics.expenses">Expenses</div><div class="flow-value" id="biDailyExpenses">TSH 0</div></div>
+              <div class="bi-flow-card flow-net"><div class="flow-label" data-i18n="analytics.netProfit">Net Profit</div><div class="flow-value" id="biDailyNetProfit">TSH 0</div></div>
+            </div>
+            <div class="bi-kpi-grid" style="grid-template-columns: 1fr 1fr;">
+              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.topProduct">Top Product</span><span class="bi-kpi-value" id="biDailyTopProduct" style="font-size:15px">—</span></div>
+              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.topSeller">Top Seller</span><span class="bi-kpi-value" id="biDailyTopSeller" style="font-size:15px">—</span></div>
+            </div>
+          </div>
+
+          <!-- Sales & Revenue Trend + Profit & Expense Trend -->
+          <div class="bi-trend-grid">
+            <div class="bi-chart-panel">
+              <div class="panel-title">
+                <h3 data-i18n="analytics.salesTrend">Sales & Revenue Trend</h3>
+                <span id="biSalesTrendRange" data-i18n="analytics.last7Days">Last 7 Days</span>
+              </div>
+              <div class="bi-chart-canvas amcharts-chart" id="biSalesTrendChart">
+                <div class="bi-empty-state"><i class="bi bi-bar-chart-line"></i><p data-i18n="analytics.noData">No sales data available for this period.</p></div>
+              </div>
+            </div>
+
+            <div class="bi-chart-panel">
+              <div class="panel-title">
+                <h3 data-i18n="analytics.profitTrend">Profit & Expense Trend</h3>
+                <span id="biProfitTrendRange"></span>
+              </div>
+              <div class="bi-chart-canvas amcharts-chart" id="biProfitTrendChart">
+                <div class="bi-empty-state"><i class="bi bi-graph-up"></i><p data-i18n="analytics.noData">No profit data available for this period.</p></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Expense Impact (Owner) -->
+          <div class="bi-subsection owner-only" id="biExpenseSection" style="margin-top:18px">
+            <div class="bi-expense-flow" id="biExpenseFlow">
+              <div class="bi-flow-card flow-revenue"><div class="flow-label" data-i18n="analytics.revenue">Revenue</div><div class="flow-value" id="biExpRevenue">TSH 0</div></div>
+              <div class="bi-flow-card flow-gross"><div class="flow-label" data-i18n="analytics.grossProfit">Gross Profit</div><div class="flow-value" id="biExpGrossProfit">TSH 0</div></div>
+              <div class="bi-flow-card flow-expense"><div class="flow-label" data-i18n="analytics.expenses">Expenses</div><div class="flow-value" id="biExpExpenses">TSH 0</div></div>
+              <div class="bi-flow-card flow-net"><div class="flow-label" data-i18n="analytics.netProfit">Net Profit</div><div class="flow-value" id="biExpNetProfit">TSH 0</div></div>
+            </div>
+            <div class="panel" style="padding:16px">
+              <h3 data-i18n="analytics.expenseBreakdown">Expense Breakdown</h3>
+              <div class="bi-table-wrap">
+                <table class="bi-table" id="biExpenseBreakdownTable">
+                  <thead><tr><th data-i18n="table.category">Category</th><th class="align-right" data-i18n="table.amount">Amount</th><th class="align-right">% of Total</th></tr></thead>
+                  <tbody id="biExpenseBreakdownBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Discount Analysis -->
+          <div class="bi-subsection" id="biDiscountSection" style="margin-top:18px">
+            <div class="bi-kpi-grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-bottom:18px;">
+              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.totalDiscount">Total Discount</span><span class="bi-kpi-value danger" id="biDiscountTotal">TSH 0</span></div>
+              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.discountedItems">Discounted Items</span><span class="bi-kpi-value" id="biDiscountedItems">0</span></div>
+              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.discountRate">Discount Rate</span><span class="bi-kpi-value" id="biDiscountRate">0%</span></div>
+              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.discountedSales">Discounted Sales</span><span class="bi-kpi-value" id="biDiscountedSales">0</span></div>
+            </div>
+            <div class="panel" style="padding:16px">
+              <h3 data-i18n="analytics.promotionPerformance">Promotion Performance</h3>
+              <div class="bi-table-wrap">
+                <table class="bi-table" id="biPromoTable">
+                  <thead>
+                    <tr>
+                      <th data-i18n="promotions.name">Promotion</th>
+                      <th class="align-right">%</th>
+                      <th class="align-right" data-i18n="analytics.salesCount">Sales</th>
+                      <th class="align-right" data-i18n="analytics.itemsSold">Items</th>
+                      <th class="align-right" data-i18n="analytics.revenue">Revenue</th>
+                      <th class="align-right" data-i18n="analytics.grossProfit">Profit</th>
+                      <th class="align-right" data-i18n="analytics.discountGiven">Discount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="biPromoBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══════════ VIEW 2 — PERFORMANCE BREAKDOWN ═══════════ -->
+        <div class="bi-view-panel hidden" id="biViewBreakdown" role="tabpanel">
+          <!-- Seller Performance -->
+          <div class="panel" style="padding:16px">
+            <div class="panel-title">
+              <h3 data-i18n="analytics.sellerRanking">Seller Performance</h3>
+            </div>
+            <div class="bi-sort-bar" id="biSellerSort">
+              <button class="bi-sort-btn active" data-sort="revenue" data-i18n="analytics.byRevenue">By Revenue</button>
+              <button class="bi-sort-btn" data-sort="profit" data-i18n="analytics.byProfit">By Profit</button>
+              <button class="bi-sort-btn" data-sort="sales" data-i18n="analytics.bySales">By Sales</button>
+              <button class="bi-sort-btn" data-sort="items" data-i18n="analytics.byItems">By Items</button>
+            </div>
+            <div class="bi-chart-canvas amcharts-chart" id="biSellerRankingChart">
+              <div class="bi-empty-state"><i class="bi bi-people"></i><p data-i18n="analytics.noData">No seller data available for this period.</p></div>
+            </div>
+            <div class="bi-table-wrap">
+              <table class="bi-table" id="biSellerTable">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th data-i18n="users.name">Seller</th>
+                    <th class="align-right" data-i18n="analytics.salesCount">Sales</th>
+                    <th class="align-right" data-i18n="analytics.itemsSold">Items</th>
+                    <th class="align-right" data-i18n="analytics.revenue">Revenue</th>
+                    <th class="align-right" data-i18n="analytics.grossProfit">Profit</th>
+                    <th class="align-right" data-i18n="analytics.profitMargin">Margin</th>
+                    <th class="align-right" data-i18n="analytics.avgOrderValue">Avg Order</th>
+                    <th class="align-right" data-i18n="analytics.discountGiven">Discounts</th>
+                  </tr>
+                </thead>
+                <tbody id="biSellerBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bi-subsection" style="margin-top:18px">
+            <h3 class="bi-subsection-title" data-i18n="analytics.sellerTrend">Seller Trend</h3>
+            <select class="bi-seller-select" id="biSellerSelect"><option value="" data-i18n="analytics.selectSeller">Select a seller</option></select>
+            <div class="bi-chart-panel" style="margin-top:12px">
+              <div class="bi-chart-canvas amcharts-chart" id="biSellerTrendChart">
+                <div class="bi-empty-state"><i class="bi bi-person-line-dotted"></i><p data-i18n="analytics.selectSellerHint">Select a seller to view their trend.</p></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Product Performance -->
+          <div class="panel" style="padding:16px">
+            <div class="panel-title">
+              <h3 data-i18n="analytics.productRanking">Product Performance</h3>
+            </div>
+            <div class="bi-sort-bar" id="biProductSort">
+              <button class="bi-sort-btn active" data-sort="revenue" data-i18n="analytics.byRevenue">By Revenue</button>
+              <button class="bi-sort-btn" data-sort="profit" data-i18n="analytics.byProfit">By Profit</button>
+              <button class="bi-sort-btn" data-sort="quantity" data-i18n="analytics.byQuantity">By Quantity</button>
+            </div>
+            <div class="bi-chart-canvas amcharts-chart" id="biProductRankingChart">
+              <div class="bi-empty-state"><i class="bi bi-box-seam"></i><p data-i18n="analytics.noData">No product data available for this period.</p></div>
+            </div>
+            <div class="bi-table-wrap">
+              <table class="bi-table" id="biProductTable">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th data-i18n="products.name">Product</th>
+                    <th data-i18n="table.category">Category</th>
+                    <th class="align-right" data-i18n="analytics.quantitySold">Qty Sold</th>
+                    <th class="align-right" data-i18n="analytics.revenue">Revenue</th>
+                    <th class="align-right" data-i18n="analytics.grossProfit">Profit</th>
+                    <th class="align-right" data-i18n="analytics.profitMargin">Margin</th>
+                    <th class="align-right" data-i18n="analytics.avgSellingPrice">Avg Price</th>
+                    <th class="align-right" data-i18n="analytics.stock">Stock</th>
+                  </tr>
+                </thead>
+                <tbody id="biProductBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bi-subsection" style="margin-top:18px">
+            <h3 class="bi-subsection-title" data-i18n="analytics.productCategories">Product Categories</h3>
+            <div class="bi-kpi-grid" id="biProductCategories" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"></div>
+          </div>
+
+          <div class="bi-subsection" style="margin-top:18px">
+            <h3 class="bi-subsection-title" data-i18n="analytics.productTrend">Product Trend</h3>
+            <select class="bi-seller-select" id="biProductSelect"><option value="" data-i18n="analytics.selectProduct">Select a product</option></select>
+            <div class="bi-chart-panel" style="margin-top:12px">
+              <div class="bi-chart-canvas amcharts-chart" id="biProductTrendChart">
+                <div class="bi-empty-state"><i class="bi bi-box-seam"></i><p data-i18n="analytics.selectProductHint">Select a product to view its trend.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
       <main class="page owner-only" id="users">
         <div class="page-heading">
           <div><p class="eyebrow" data-i18n="users.eyebrow">Team Access</p><h2 data-i18n="users.title">User Management</h2></div>
@@ -511,6 +747,185 @@ $timestamp = time();
               <thead><tr><th data-i18n="table.date">Date</th><th data-i18n="table.category">Category</th><th data-i18n="expenses.descriptionLabel">Description</th><th data-i18n="table.amount">Amount</th><th data-i18n="users.name">Created By</th><th class="owner-only" data-i18n="users.actions">Actions</th></tr></thead>
               <tbody id="expensesBody">
                 <tr><td colspan="6" data-i18n="expenses.noExpenses">No expenses recorded yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </main>
+      <main class="page owner-only" id="audit">
+        <div class="page-heading">
+          <div><p class="eyebrow" data-i18n="audit.eyebrow">Security &amp; Compliance</p><h2 data-i18n="nav.audit">Audit Logs</h2></div>
+          <button class="gold-button" id="auditRefreshBtn"><i class="bi bi-arrow-clockwise"></i> <span data-i18n="audit.refresh">Refresh</span></button>
+        </div>
+
+        <section class="panel audit-filters">
+          <div class="audit-filter-grid">
+            <div class="audit-filter-field audit-search">
+              <label class="sr-only" for="auditSearch" data-i18n="common.search">Search</label>
+              <div class="input-icon-wrap">
+                <i class="bi bi-search"></i>
+                <input id="auditSearch" type="text" placeholder="Search" data-i18n-placeholder="audit.searchPlaceholder" />
+              </div>
+            </div>
+            <div class="audit-filter-field">
+              <label class="sr-only" for="auditDateFrom" data-i18n="audit.dateFrom">From date</label>
+              <input id="auditDateFrom" type="date" aria-label="From date" data-i18n-aria-label="audit.dateFrom" />
+            </div>
+            <div class="audit-filter-field">
+              <label class="sr-only" for="auditDateTo" data-i18n="audit.dateTo">To date</label>
+              <input id="auditDateTo" type="date" aria-label="To date" data-i18n-aria-label="audit.dateTo" />
+            </div>
+            <div class="audit-filter-field">
+              <select id="auditUserFilter" aria-label="User" data-i18n-aria-label="audit.user"><option value="" data-i18n="audit.allUsers">All Users</option></select>
+            </div>
+            <div class="audit-filter-field">
+              <select id="auditRoleFilter" aria-label="Role" data-i18n-aria-label="audit.role"><option value="" data-i18n="audit.allRoles">All Roles</option><option value="OWNER">OWNER</option><option value="SELLER">SELLER</option></select>
+            </div>
+            <div class="audit-filter-field">
+              <select id="auditModuleFilter" aria-label="Module" data-i18n-aria-label="audit.module"><option value="" data-i18n="audit.allModules">All Modules</option></select>
+            </div>
+            <div class="audit-filter-field">
+              <select id="auditActionFilter" aria-label="Action" data-i18n-aria-label="audit.action"><option value="" data-i18n="audit.allActions">All Actions</option></select>
+            </div>
+            <div class="audit-filter-field">
+              <select id="auditEntityFilter" aria-label="Entity type" data-i18n-aria-label="audit.entityType"><option value="" data-i18n="audit.allEntities">All Entity Types</option></select>
+            </div>
+          </div>
+          <div class="audit-filter-actions">
+            <button type="button" class="ghost-button" id="auditApplyFilters"><i class="bi bi-funnel-fill"></i> <span data-i18n="audit.applyFilters">Apply Filters</span></button>
+            <button type="button" class="ghost-button" id="auditResetFilters"><i class="bi bi-arrow-counterclockwise"></i> <span data-i18n="audit.resetFilters">Reset</span></button>
+          </div>
+        </section>
+
+        <article class="panel" style="margin-top:18px">
+          <div class="panel-title">
+            <h3 data-i18n="audit.logEntries">Log Entries</h3>
+            <span id="auditResultCount"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="audit-table">
+              <thead><tr><th data-i18n="audit.dateTime">Date &amp; Time</th><th data-i18n="audit.user">User</th><th data-i18n="audit.role">Role</th><th data-i18n="audit.action">Action</th><th data-i18n="audit.module">Module</th><th data-i18n="audit.description">Description</th><th data-i18n="audit.ip">IP Address</th><th data-i18n="audit.actions">Actions</th></tr></thead>
+              <tbody id="auditBody">
+                <tr><td colspan="8" data-i18n="audit.loading">Loading audit logs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="audit-pagination" id="auditPagination"></div>
+        </article>
+      </main>
+      <main class="page owner-only" id="backup">
+        <div class="page-heading">
+          <div><p class="eyebrow" data-i18n="backup.eyebrow">Data Protection</p><h2 data-i18n="backup.title">Backup Management</h2></div>
+          <div class="backup-heading-actions">
+            <button class="ghost-button" id="backupRefreshBtn"><i class="bi bi-arrow-clockwise"></i> <span data-i18n="audit.refresh">Refresh</span></button>
+          </div>
+        </div>
+
+        <section class="stats-grid backup-status-grid">
+          <article class="stat-card backup-stat">
+            <span data-i18n="backup.lastDbBackup">Last Database Backup</span>
+            <strong id="backupLastDb">—</strong>
+            <small id="backupLastDbMeta" data-i18n="backup.never">Never created</small>
+          </article>
+          <article class="stat-card backup-stat">
+            <span data-i18n="backup.lastFilesBackup">Last Files Backup</span>
+            <strong id="backupLastFiles">—</strong>
+            <small id="backupLastFilesMeta" data-i18n="backup.never">Never created</small>
+          </article>
+          <article class="stat-card backup-stat">
+            <span data-i18n="backup.lastFullBackup">Last Full Backup</span>
+            <strong id="backupLastFull">—</strong>
+            <small id="backupLastFullMeta" data-i18n="backup.never">Never created</small>
+          </article>
+          <article class="stat-card backup-stat">
+            <span data-i18n="backup.totalBackups">Available Backups</span>
+            <strong id="backupCount">0</strong>
+            <small id="backupTotalSize">0 B total</small>
+          </article>
+        </section>
+
+        <article class="panel backup-actions-panel">
+          <div class="panel-title">
+            <h3 data-i18n="backup.actions">Backup Actions</h3>
+            <span data-i18n="backup.actionsHint">Manual operations</span>
+          </div>
+          <div class="backup-action-row">
+            <div class="backup-action-card">
+              <i class="bi bi-database-fill backup-action-icon"></i>
+              <h4 data-i18n="backup.dbBackup">Database Backup</h4>
+              <p data-i18n="backup.dbBackupDesc">Snapshot of all tables, data, indexes and relationships.</p>
+              <button class="gold-button" id="createDbBackupBtn" data-i18n="backup.createDbBackup"><i class="bi bi-plus-circle-fill"></i> <span class="btn-text" data-i18n="backup.createDbBackup">Create Database Backup</span><span class="btn-loading-text">Creating Backup...</span></button>
+            </div>
+            <div class="backup-action-card">
+              <i class="bi bi-folder-fill backup-action-icon file"></i>
+              <h4 data-i18n="backup.filesBackup">Files Backup</h4>
+              <p data-i18n="backup.filesBackupDesc">Archive of product images and other user uploads.</p>
+              <button class="gold-button" id="createFilesBackupBtn" data-i18n="backup.createFilesBackup"><i class="bi bi-plus-circle-fill"></i> <span class="btn-text" data-i18n="backup.createFilesBackup">Create Files Backup</span><span class="btn-loading-text">Creating Backup...</span></button>
+            </div>
+            <div class="backup-action-card">
+              <i class="bi bi-box-seam-fill backup-action-icon full"></i>
+              <h4 data-i18n="backup.fullBackup">Full Backup</h4>
+              <p data-i18n="backup.fullBackupDesc">Database + files in one self-contained archive.</p>
+              <button class="gold-button" id="createFullBackupBtn" data-i18n="backup.createFullBackup"><i class="bi bi-plus-circle-fill"></i> <span class="btn-text" data-i18n="backup.createFullBackup">Create Full Backup</span><span class="btn-loading-text">Creating Backup...</span></button>
+            </div>
+          </div>
+        </article>
+
+        <div class="backup-layout">
+          <article class="panel backup-retention-panel">
+            <div class="panel-title">
+              <h3 data-i18n="backup.retention">Retention Policy</h3>
+              <span data-i18n="backup.retentionHint">Number of backups to keep</span>
+            </div>
+            <div class="retention-form">
+              <label class="retention-field"><span data-i18n="backup.keepDaily">Daily backups</span><input type="number" id="retentionDaily" min="0" max="365" step="1" /></label>
+              <label class="retention-field"><span data-i18n="backup.keepWeekly">Weekly backups</span><input type="number" id="retentionWeekly" min="0" max="156" step="1" /></label>
+              <label class="retention-field"><span data-i18n="backup.keepMonthly">Monthly backups</span><input type="number" id="retentionMonthly" min="0" max="120" step="1" /></label>
+              <label class="retention-field"><span data-i18n="backup.keepFull">Full backups</span><input type="number" id="retentionFull" min="0" max="30" step="1" /></label>
+              <div class="retention-actions">
+                <button class="ghost-button" id="saveRetentionBtn"><i class="bi bi-save-fill"></i> <span data-i18n="backup.saveRetention">Save Retention</span></button>
+                <button class="ghost-button" id="runCleanupBtn"><i class="bi bi-broom"></i> <span data-i18n="backup.runCleanup">Run Cleanup</span></button>
+              </div>
+            </div>
+            <div class="backup-storage-info">
+              <p class="form-hint" id="backupStorageInfo"></p>
+            </div>
+          </article>
+
+          <article class="panel backup-storage-panel">
+            <div class="panel-title">
+              <h3 data-i18n="backup.storageTitle">Storage</h3>
+              <span data-i18n="backup.storageHint">Where backups live</span>
+            </div>
+            <div class="storage-detail">
+              <div class="storage-row"><span data-i18n="backup.location">Location</span><strong id="backupStorageLocationId" class="storage-value">—</strong></div>
+              <div class="storage-row"><span data-i18n="backup.totalSize">Total backup size</span><strong id="backupTotalSizeDetail" class="storage-value">—</strong></div>
+              <div class="storage-row"><span data-i18n="backup.database">Database</span><strong id="backupCountDb" class="storage-value">—</strong></div>
+              <div class="storage-row"><span data-i18n="backup.files">Files</span><strong id="backupCountFiles" class="storage-value">—</strong></div>
+              <div class="storage-row"><span data-i18n="backup.full">Full</span><strong id="backupCountFull" class="storage-value">—</strong></div>
+              <div class="storage-row"><span data-i18n="backup.operationStatus">Operation status</span><strong id="backupOperationStatus" class="storage-value">—</strong></div>
+            </div>
+          </article>
+        </div>
+
+        <article class="panel backup-history-panel">
+          <div class="panel-title">
+            <h3 data-i18n="backup.history">Backup History</h3>
+            <span id="backupHistoryCount"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="backup-table">
+              <thead><tr>
+                <th data-i18n="backup.thName">Backup Name</th>
+                <th data-i18n="backup.thType">Type</th>
+                <th data-i18n="backup.thDate">Date / Time</th>
+                <th data-i18n="backup.thSize">Size</th>
+                <th data-i18n="backup.thStatus">Status</th>
+                <th data-i18n="backup.thCreator">Created By</th>
+                <th data-i18n="backup.thActions">Actions</th>
+              </tr></thead>
+              <tbody id="backupHistoryBody">
+                <tr><td colspan="7" data-i18n="backup.loading">Loading backups...</td></tr>
               </tbody>
             </table>
           </div>
@@ -783,6 +1198,64 @@ $timestamp = time();
     </div>
   </div>
 
+  <!-- Audit detail modal -->
+  <div class="modal-overlay hidden" id="auditDetailModal" role="dialog" aria-modal="true" aria-labelledby="auditDetailModalTitle">
+    <div class="modal-dialog audit-detail-dialog">
+      <div class="modal-head">
+        <h3 id="auditDetailModalTitle" data-i18n="audit.detailTitle">Audit Log Details</h3>
+        <button type="button" class="reset-close" id="auditDetailClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="audit-detail-body" id="auditDetailBody"></div>
+      <div class="modal-actions">
+        <button type="button" class="ghost-button" id="auditDetailCloseBtn" data-i18n="common.close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backup detail modal -->
+  <div class="modal-overlay hidden" id="backupDetailModal">
+    <div class="modal-dialog backup-detail-dialog">
+      <div class="modal-head">
+        <h3 data-i18n="backup.detailTitle">Backup Details</h3>
+        <button type="button" class="reset-close" id="backupDetailClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="audit-detail-body" id="backupDetailBody"></div>
+      <div class="modal-actions">
+        <button type="button" class="ghost-button" id="backupDetailCloseBtn" data-i18n="common.close">Close</button>
+        <button type="button" class="gold-button backup-detail-validate" id="backupDetailValidateBtn"><i class="bi bi-check-circle"></i> <span data-i18n="backup.validate">Validate</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Restore confirmation modal -->
+  <div class="modal-overlay hidden" id="restoreModal">
+    <div class="modal-dialog restore-dialog">
+      <div class="modal-head">
+        <h3 data-i18n="backup.restoreTitle">Restore Backup</h3>
+        <button type="button" class="reset-close" id="restoreClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="restore-warning">
+        <div class="restore-warning-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+        <div>
+          <strong data-i18n="backup.restoreWarning">WARNING: Restoring this backup may replace current production data.</strong>
+          <p class="restore-warning-text" data-i18n="backup.restoreWarningText">Before any restore, the current database is automatically backed up first. Then the selected backup will be applied. This action cannot be undone.</p>
+        </div>
+      </div>
+      <div class="restore-details" id="restoreDetails"></div>
+      <div class="restore-step hidden" id="restoreStep1">
+        <label class="restore-confirm-check">
+          <input type="checkbox" id="restoreConfirmCheck1" />
+          <span data-i18n="backup.restoreConfirm1">I understand that current production data will be replaced and an automatic safety backup will be created first.</span>
+        </label>
+      </div>
+      <p class="form-hint" id="restoreMessage" role="status"></p>
+      <div class="modal-actions">
+        <button type="button" class="ghost-button" id="restoreCancel" data-i18n="common.cancel">Cancel</button>
+        <button type="button" class="danger-button" id="restoreStep2Btn" disabled data-i18n="backup.restoreButton"><i class="bi bi-arrow-counterclockwise"></i> Confirm Restore</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Idle session warning modal -->
   <div class="modal-overlay hidden" id="idleWarningModal" role="alertdialog" aria-modal="true" aria-labelledby="idleWarningTitle" aria-describedby="idleWarningText">
     <div class="modal-dialog idle-dialog">
@@ -805,6 +1278,15 @@ $timestamp = time();
     </div>
   </div>
 
+  <!-- amCharts 5 (self-hosted, served from 'self' to remain CSP-safe) -->
+  <script src="assets/js/amcharts/index.js?v=<?php echo $timestamp; ?>"></script>
+  <script src="assets/js/amcharts/xy.js?v=<?php echo $timestamp; ?>"></script>
+  <script src="assets/js/amcharts/percent.js?v=<?php echo $timestamp; ?>"></script>
+  <script src="assets/js/amcharts/themes/Animated.js?v=<?php echo $timestamp; ?>"></script>
+  <!-- Mpeli Outfit Store chart layer -->
+  <script src="assets/js/chart-utils.js?v=<?php echo $timestamp; ?>&bust=1"></script>
+  <script src="assets/js/dashboard-charts.js?v=<?php echo $timestamp; ?>&bust=1"></script>
+  <script src="assets/js/business-analysis-charts.js?v=<?php echo $timestamp; ?>&bust=1"></script>
   <script src="assets/js/script.js?v=<?php echo $timestamp; ?>&bust=9"></script>
 </body>
 </html>

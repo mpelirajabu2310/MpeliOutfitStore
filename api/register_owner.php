@@ -16,7 +16,10 @@ if (owner_exists($pdo)) {
 // IP-based rate limiting: 3 attempts per 5 minutes
 if (!check_rate_limit('register', 3, 300)) {
     $ip = get_client_ip();
-    log_activity(0, 'register_blocked', "IP: $ip — too many attempts", 'blocked');
+    audit_log(0, 'register_blocked', "IP: $ip — too many attempts", 'blocked', [
+        'module' => 'auth',
+        'description' => "IP: {$ip} blocked due to too many registration attempts",
+    ]);
     respond(['success' => false, 'message' => 'Too many registration attempts. Try again in 5 minutes.'], 429);
 }
 
@@ -67,7 +70,13 @@ try {
     ]);
 
     $newUserId = (int)$pdo->lastInsertId();
-    log_activity($newUserId, 'owner_registered', "Username: $username");
+    audit_log($newUserId, 'owner_registered', "Username: $username", 'success', [
+        'module' => 'auth',
+        'description' => "Owner account created: {$username}",
+        'entity_type' => 'user',
+        'entity_id' => $newUserId,
+        'new_values' => ['name' => $name, 'username' => $username, 'role' => 'OWNER'],
+    ]);
 
     respond(['success' => true, 'message' => 'Owner account created. You can now log in.'], 201);
 } catch (PDOException $e) {

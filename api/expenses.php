@@ -59,6 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (strlen($expenseName) > 255) {
         respond(['success' => false, 'message' => 'Expense name must be 255 characters or fewer.'], 422);
     }
+    if (strlen($description) > 1000) {
+        respond(['success' => false, 'message' => 'Description must be 1000 characters or fewer.'], 422);
+    }
     $requestId = (string)($data['request_id'] ?? '');
     if ($requestId !== '' && (strlen($requestId) > 64 || !preg_match('/^[A-Za-z0-9._:-]+$/', $requestId))) {
         respond(['success' => false, 'message' => 'Invalid request_id.'], 422);
@@ -74,7 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $requestId ?: null
     );
 
-    log_activity((int)$user['id'], 'expense_created', "Category: {$category}, Amount: {$amount}, Date: {$expenseDate}");
+    audit_log((int)$user['id'], 'expense_created', "Category: {$category}, Amount: {$amount}, Date: {$expenseDate}", 'success', [
+        'module' => 'expenses',
+        'description' => "Expense recorded: {$category}, {$amount} on {$expenseDate}",
+        'entity_type' => 'expense',
+        'new_values' => ['category' => $category, 'amount' => $amount, 'expense_date' => $expenseDate],
+    ]);
     respond(['success' => true, 'message' => 'Expense recorded successfully.'], 201);
 }
 
@@ -118,6 +126,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if (strlen($expenseName) > 255) {
         respond(['success' => false, 'message' => 'Expense name must be 255 characters or fewer.'], 422);
     }
+    if (strlen($description) > 1000) {
+        respond(['success' => false, 'message' => 'Description must be 1000 characters or fewer.'], 422);
+    }
 
     $updateData = [];
     if ($category !== '') {
@@ -136,7 +147,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
 
     try {
         $expenseService->updateExpense($id, $updateData);
-        log_activity((int)$user['id'], 'expense_updated', "Expense ID: {$id}");
+
+        $oldValues = [
+            'category' => $expense['category'],
+            'expense_name' => $expense['expense_name'],
+            'description' => $expense['description'],
+            'amount' => (float)$expense['amount'],
+            'expense_date' => $expense['expense_date'],
+        ];
+        audit_log((int)$user['id'], 'expense_updated', "Expense ID: {$id}", 'success', [
+            'module' => 'expenses',
+            'description' => "Expense updated (ID: {$id})",
+            'entity_type' => 'expense',
+            'entity_id' => $id,
+            'old_values' => $oldValues,
+            'new_values' => $updateData,
+        ]);
         respond(['success' => true, 'message' => 'Expense updated successfully.']);
     } catch (RuntimeException $e) {
         respond(['success' => false, 'message' => $e->getMessage()], 404);
@@ -161,7 +187,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
 
     try {
         $expenseService->deleteExpense($id);
-        log_activity((int)$user['id'], 'expense_deleted', "Expense ID: {$id}");
+        audit_log((int)$user['id'], 'expense_deleted', "Expense ID: {$id}", 'success', [
+            'module' => 'expenses',
+            'description' => "Expense deleted (ID: {$id}, category: {$expense['category']})",
+            'entity_type' => 'expense',
+            'entity_id' => $id,
+            'old_values' => ['category' => $expense['category'], 'amount' => (float)$expense['amount'], 'expense_date' => $expense['expense_date']],
+        ]);
         respond(['success' => true, 'message' => 'Expense deleted successfully.']);
     } catch (RuntimeException $e) {
         respond(['success' => false, 'message' => $e->getMessage()], 404);

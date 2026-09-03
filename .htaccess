@@ -2,10 +2,19 @@
 # Production .htaccess — Mpeli OutFit Store
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Force HTTPS (uncomment when SSL is configured)
-# RewriteEngine On
-# RewriteCond %{HTTPS} off
-# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# ══════════════════════════════════════════════════════════════════════════════
+# Force HTTPS — redirect all plain-HTTP traffic to HTTPS (SSL required).
+#
+# Best-effort / optional: keep disabled until an SSL certificate is verified
+# active on the production domain. To enable once SSL is confirmed, uncomment
+# the three lines below (and remove the "OFF" note). The site already serves
+# Secure cookies and works over HTTPS automatically when SSL is present.
+#
+#    RewriteEngine On
+#    RewriteCond %{HTTPS} off
+#    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# ══════════════════════════════════════════════════════════════════════════════
+# (HTTPS redirect currently OFF — see instructions above)
 
 # ─── PHP Error Handling ──────────────────────────────────────────────────────
 php_flag display_errors off
@@ -20,7 +29,7 @@ php_value error_reporting -1
     Header set X-XSS-Protection "1; mode=block"
     Header set Referrer-Policy "strict-origin-when-cross-origin"
     Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';"
+    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';"
 </IfModule>
 
 # ─── Block Sensitive Files ───────────────────────────────────────────────────

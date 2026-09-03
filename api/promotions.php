@@ -42,7 +42,13 @@ $data = read_json_body();
 if ($method === 'POST') {
     try {
         $promotionId = $promotionService->createPromotion((int)$user['id'], $data);
-        log_activity((int)$user['id'], 'promotion_created', "Promotion ID: {$promotionId}");
+        audit_log((int)$user['id'], 'promotion_created', "Promotion ID: {$promotionId}", 'success', [
+            'module' => 'promotions',
+            'description' => "Promotion created: " . ($data['name'] ?? "ID {$promotionId}"),
+            'entity_type' => 'promotion',
+            'entity_id' => $promotionId,
+            'new_values' => ['name' => $data['name'] ?? '', 'percentage' => $data['percentage'] ?? null],
+        ]);
         respond(['success' => true, 'message' => 'Promotion created successfully.', 'promotion_id' => $promotionId], 201);
     } catch (Throwable $exception) {
         $message = $exception instanceof RuntimeException ? $exception->getMessage() : 'Failed to create promotion.';
@@ -62,10 +68,22 @@ if ($method === 'PUT') {
         if (($data['action'] ?? '') === 'set_status') {
             $status = (string)($data['status'] ?? '');
             $promotionService->setStatus($promotionId, $status);
-            log_activity((int)$user['id'], 'promotion_status_changed', "Promotion ID: {$promotionId}, Status: {$status}");
+            audit_log((int)$user['id'], 'promotion_status_changed', "Promotion ID: {$promotionId}, Status: {$status}", 'success', [
+                'module' => 'promotions',
+                'description' => "Promotion status changed to {$status} (ID: {$promotionId})",
+                'entity_type' => 'promotion',
+                'entity_id' => $promotionId,
+                'new_values' => ['status' => $status],
+            ]);
         } else {
             $promotionService->updatePromotion($promotionId, $data);
-            log_activity((int)$user['id'], 'promotion_updated', "Promotion ID: {$promotionId}");
+            audit_log((int)$user['id'], 'promotion_updated', "Promotion ID: {$promotionId}", 'success', [
+                'module' => 'promotions',
+                'description' => "Promotion updated (ID: {$promotionId})",
+                'entity_type' => 'promotion',
+                'entity_id' => $promotionId,
+                'new_values' => $data,
+            ]);
         }
         respond(['success' => true, 'message' => 'Promotion updated successfully.']);
     } catch (Throwable $exception) {
@@ -83,7 +101,12 @@ if ($method === 'DELETE') {
     }
     try {
         $promotionService->deletePromotion($promotionId);
-        log_activity((int)$user['id'], 'promotion_deleted', "Promotion ID: {$promotionId}");
+        audit_log((int)$user['id'], 'promotion_deleted', "Promotion ID: {$promotionId}", 'success', [
+            'module' => 'promotions',
+            'description' => "Promotion deleted (ID: {$promotionId})",
+            'entity_type' => 'promotion',
+            'entity_id' => $promotionId,
+        ]);
         respond(['success' => true, 'message' => 'Promotion deleted successfully.']);
     } catch (Throwable $exception) {
         error_log('[promotions] delete: ' . $exception->getMessage());

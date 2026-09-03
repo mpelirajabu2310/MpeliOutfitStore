@@ -41,7 +41,18 @@ $salesService = new SalesService();
 try {
     $result = $salesService->createSale($items, $user['id'], $paymentMethod, $requestId ?: null, $bulkDiscountPercent);
 
-    log_activity((int)$user['id'], 'sale_completed', "Receipt: {$result['receipt_number']}, Amount: {$result['total_amount']}");
+    audit_log((int)$user['id'], 'sale_completed', "Receipt: {$result['receipt_number']}, Amount: {$result['total_amount']}", 'success', [
+        'module' => 'sales',
+        'description' => "Sale completed: Receipt {$result['receipt_number']}, Total: {$result['total_amount']}",
+        'entity_type' => 'sale',
+        'entity_id' => (int)($result['sale_id'] ?? 0),
+        'new_values' => [
+            'receipt_number' => $result['receipt_number'],
+            'total_amount' => $result['total_amount'],
+            'payment_method' => $paymentMethod,
+            'item_count' => count($items),
+        ],
+    ]);
 
     respond([
         'success' => true,

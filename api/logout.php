@@ -10,7 +10,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Log before destroying session
 $userId = $_SESSION['user_id'] ?? 0;
 if ($userId) {
-    log_activity((int)$userId, 'logout');
+    audit_log((int)$userId, 'logout', 'User logged out', 'success', [
+        'module' => 'auth',
+        'description' => 'User logged out',
+        'entity_type' => 'user',
+        'entity_id' => $userId,
+    ]);
 }
 
 // Clear session regardless of auth state (best-effort logout)

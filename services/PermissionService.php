@@ -10,6 +10,9 @@ class PermissionService
             'dashboard.view',
             'dashboard.view_financials',
             'dashboard.view_charts',
+            'analytics.view',
+            'analytics.view_financials',
+            'analytics.view_sellers',
             'products.view',
             'products.create',
             'products.update',
@@ -36,9 +39,11 @@ class PermissionService
             'maintenance.manage',
             'backup.manage',
             'migration.run',
+            'audit.view',
         ],
         'SELLER' => [
             'dashboard.view',
+            'analytics.view',
             'products.view',
             'promotions.view',
             'sales.create',
@@ -111,6 +116,11 @@ class PermissionService
     public static function canManageSettings(string $role): bool
     {
         return self::hasPermission($role, 'settings.update');
+    }
+
+    public static function canViewAuditLog(string $role): bool
+    {
+        return self::hasPermission($role, 'audit.view');
     }
 
     public static function canManageExpenses(string $role): bool

@@ -31,7 +31,12 @@ if ($method === 'POST' || $method === 'PUT') {
         $healthService->disableMaintenanceMode();
     }
 
-    log_activity((int)$user['id'], 'maintenance_' . ($enable ? 'enabled' : 'disabled'), "Message: $message");
+    audit_log((int)$user['id'], 'maintenance_' . ($enable ? 'enabled' : 'disabled'), "Message: $message", 'success', [
+        'module' => 'system',
+        'description' => "Maintenance mode " . ($enable ? 'enabled' : 'disabled') . ($enable ? ": {$message}" : ''),
+        'entity_type' => 'settings',
+        'new_values' => ['maintenance_mode' => $enable, 'message' => $message],
+    ]);
     respond(['success' => true, 'maintenance' => $healthService->getMaintenanceInfo()]);
 }
 
@@ -39,7 +44,11 @@ if ($method === 'DELETE') {
     require_csrf();
     $healthService = new SystemHealthService();
     $healthService->disableMaintenanceMode();
-    log_activity((int)$user['id'], 'maintenance_disabled', 'Disabled via DELETE');
+    audit_log((int)$user['id'], 'maintenance_disabled', 'Disabled via DELETE', 'success', [
+        'module' => 'system',
+        'description' => 'Maintenance mode disabled via DELETE',
+        'entity_type' => 'settings',
+    ]);
     respond(['success' => true, 'maintenance' => $healthService->getMaintenanceInfo()]);
 }
 
