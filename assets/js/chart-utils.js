@@ -136,6 +136,17 @@
     // clear it so we can re-initialize cleanly.
     element.__am5root = undefined;
 
+    // Remove any leftover loading/empty/error placeholder(s). amCharts 5
+    // APPENDS its own chart div to the container (it never clears innerHTML),
+    // so a placeholder written earlier would remain stacked above the chart
+    // forever. Clearing it here guarantees the chart renders alone in its
+    // intended container on every success/re-render path.
+    const staleStates = element.querySelectorAll(".am-chart-state");
+    for (let i = staleStates.length - 1; i >= 0; i--) {
+      const placeholder = staleStates[i];
+      if (placeholder.parentNode) placeholder.parentNode.removeChild(placeholder);
+    }
+
     if (!global.am5) {
       showChartLoading(element, "Chart library loading…");
       return { root: null, disposed: false };
@@ -207,16 +218,19 @@
   //    create misleading empty charts). ──────────────────────────────────────
   function showChartLoading(element, message) {
     if (!element) return;
+    disposeRoot(element);
     element.innerHTML = `<div class="am-chart-state am-chart-loading"><span class="am-chart-spinner"></span><p>${escapeState(message || "Loading…")}</p></div>`;
   }
 
   function showChartEmpty(element, message) {
     if (!element) return;
+    disposeRoot(element);
     element.innerHTML = `<div class="am-chart-state am-chart-empty"><i class="bi bi-inbox"></i><p>${escapeState(message || "No sales data available for the selected period.")}</p></div>`;
   }
 
   function showChartError(element, message) {
     if (!element) return;
+    disposeRoot(element);
     element.innerHTML = `<div class="am-chart-state am-chart-error"><i class="bi bi-exclamation-triangle"></i><p>${escapeState(message || "Unable to load chart data.")}</p></div>`;
   }
 

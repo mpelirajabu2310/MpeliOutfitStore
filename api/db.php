@@ -497,10 +497,14 @@ function ensure_shop_settings(PDO $pdo): array
         return $row;
     }
 
-    $pdo->exec(
-        'INSERT INTO shop_settings (shop_name, currency_code, low_stock_threshold)
-         VALUES (\'Mpeli Outfit Store\', \'TSH\', 5)'
-    );
+    try {
+        $pdo->exec(
+            'INSERT IGNORE INTO shop_settings (shop_name, currency_code, low_stock_threshold)
+             VALUES (\'Mpeli Outfit Store\', \'TSH\', 5)'
+        );
+    } catch (Throwable $e) {
+        // Another request may have inserted concurrently — safe to ignore.
+    }
 
     return $pdo->query('SELECT * FROM shop_settings ORDER BY id LIMIT 1')->fetch();
 }

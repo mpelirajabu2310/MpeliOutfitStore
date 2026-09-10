@@ -104,6 +104,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
             if (strlen($adminPassword) < 8) {
                 throw new RuntimeException('Password must be at least 8 characters.');
             }
+            if (!preg_match('/[A-Za-z]/', $adminPassword) || !preg_match('/[0-9]/', $adminPassword)) {
+                throw new RuntimeException('Password must contain at least one letter and one number.');
+            }
             $userSql .= ', password_hash = :password_hash';
             $userParams['password_hash'] = password_hash($adminPassword, PASSWORD_DEFAULT);
         }

@@ -57,6 +57,8 @@ class AuditService extends BaseService
      */
     public function getLogs(array $filters = [], int $page = 1, int $perPage = 25): array
     {
+        $perPage = max(1, min(2000, $perPage));
+        $page    = max(1, $page);
         $where  = [];
         $params = [];
 

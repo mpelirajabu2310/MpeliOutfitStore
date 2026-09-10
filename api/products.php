@@ -149,6 +149,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $minPrice = $buying;
     }
 
+    // Case-insensitive duplicate check, excluding this product itself.
+    $existing = $productService->findDuplicateByName($name);
+    if ($existing && (int)$existing['id'] !== $productId) {
+        respond(['success' => false, 'message' => 'Another active product already uses this name.'], 422);
+    }
+
     try {
         $oldProduct = $productService->getProductById($productId);
         $productService->updateProduct($productId, $name, $buying, $selling, $minPrice);

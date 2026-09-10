@@ -30,6 +30,9 @@ class InventoryService extends BaseService
     {
         $stmt = $this->db->prepare('UPDATE product_variants SET stock_quantity = stock_quantity + :quantity WHERE id = :variant_id');
         $stmt->execute(['quantity' => $quantity, 'variant_id' => $variantId]);
+        if ($stmt->rowCount() === 0) {
+            throw new RuntimeException('Variant #' . $variantId . ' not found.');
+        }
     }
 
     public function getVariantWithProduct(int $variantId): ?array
@@ -67,10 +70,12 @@ class InventoryService extends BaseService
         if ($threshold === null) {
             $threshold = $this->getGlobalThreshold();
         }
-        $collate = 'COLLATE utf8mb4_unicode_ci';
-        return (int)$this->db->query(
-            "SELECT COUNT(*) FROM product_stock_summary WHERE stock_status {$collate} IN ('low_stock', 'out_of_stock')"
-        )->fetchColumn();
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*) FROM product_stock_summary
+             WHERE total_stock = 0 OR total_stock <= :threshold'
+        );
+        $stmt->execute(['threshold' => $threshold]);
+        return (int)$stmt->fetchColumn();
     }
 
     public function getLowStockAlerts(?int $threshold = null): array
@@ -78,19 +83,30 @@ class InventoryService extends BaseService
         if ($threshold === null) {
             $threshold = $this->getGlobalThreshold();
         }
-        $collate = 'COLLATE utf8mb4_unicode_ci';
-        return $this->db->query(
-            "SELECT product_name, total_stock, stock_status
+        $stmt = $this->db->prepare(
+            'SELECT product_name, total_stock, stock_status
              FROM product_stock_summary
-             WHERE stock_status {$collate} IN ('low_stock', 'out_of_stock')
-             ORDER BY total_stock ASC LIMIT 10"
-        )->fetchAll();
+             WHERE total_stock = 0 OR total_stock <= :threshold
+             ORDER BY total_stock ASC LIMIT 10'
+        );
+        $stmt->execute(['threshold' => $threshold]);
+        return $stmt->fetchAll();
     }
 
-    public function getTotalStockValue(): int
+    public function getTotalRemainingStock(): int
     {
         return (int)$this->db->query(
             'SELECT COALESCE(SUM(pv.stock_quantity), 0)
+             FROM product_variants pv
+             JOIN products p ON p.id = pv.product_id
+             WHERE p.status = \'active\''
+        )->fetchColumn();
+    }
+
+    public function getTotalInventoryValue(): int
+    {
+        return (int)$this->db->query(
+            'SELECT COALESCE(SUM(pv.stock_quantity * p.buying_price), 0)
              FROM product_variants pv
              JOIN products p ON p.id = pv.product_id
              WHERE p.status = \'active\''
@@ -103,10 +119,23 @@ class InventoryService extends BaseService
         if (!in_array($status, $allowed, true)) {
             return 0;
         }
-        $stmt = $this->db->prepare(
-            'SELECT COUNT(*) FROM product_stock_summary WHERE stock_status = :status'
-        );
-        $stmt->execute(['status' => $status]);
+        if ($threshold === null) {
+            $threshold = $this->getGlobalThreshold();
+        }
+        if ($status === 'out_of_stock') {
+            $sql = 'SELECT COUNT(*) FROM product_stock_summary WHERE total_stock = 0';
+            return (int)$this->db->query($sql)->fetchColumn();
+        }
+        if ($status === 'low_stock') {
+            $stmt = $this->db->prepare(
+                'SELECT COUNT(*) FROM product_stock_summary WHERE total_stock > 0 AND total_stock <= :threshold'
+            );
+        } else {
+            $stmt = $this->db->prepare(
+                'SELECT COUNT(*) FROM product_stock_summary WHERE total_stock > :threshold'
+            );
+        }
+        $stmt->execute(['threshold' => $threshold]);
         return (int)$stmt->fetchColumn();
     }
 
@@ -120,6 +149,7 @@ class InventoryService extends BaseService
 
     public function getLowStockItems(?int $limit = 12): array
     {
+        $limit = max(1, min(2000, (int)$limit));
         $collate = 'COLLATE utf8mb4_unicode_ci';
         return $this->db->query(
             "SELECT product_name, total_stock, reorder_level, stock_status
@@ -131,6 +161,7 @@ class InventoryService extends BaseService
 
     public function getOutOfStockItems(?int $limit = 12): array
     {
+        $limit = max(1, min(2000, (int)$limit));
         $collate = 'COLLATE utf8mb4_unicode_ci';
         return $this->db->query(
             "SELECT product_name, total_stock, stock_status

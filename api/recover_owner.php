@@ -48,7 +48,7 @@ if ($action === 'verify') {
             'module' => 'auth',
             'description' => "Recovery verify failed for username: {$username}",
         ]);
-        respond(['success' => false, 'message' => 'No account found with that username and email.'], 404);
+        respond(['success' => false, 'message' => 'No matching account found.'], 404);
     }
 
     // Generate recovery token and store in session
@@ -138,13 +138,11 @@ if ($action === 'reset') {
     // Clear recovery session data
     unset($_SESSION['recovery_token'], $_SESSION['recovery_user_id'], $_SESSION['recovery_token_time']);
 
-    // Clear rate limits for this client IP (scoped — do NOT wipe the whole
-    // rate-limit directory, which would reset every user/IP's counters and
-    // defeat brute-force protection for everyone.)
+    // Clear the recovery rate-limit counter for this client IP only.
+    // The login/register counters are NOT reset here — wiping those would let
+    // an attacker refresh a brute-force ban by triggering a recovery request.
     reset_rate_limit('recovery_verify');
     reset_rate_limit('recovery_reset');
-    reset_rate_limit('login');
-    reset_rate_limit('register');
 
     audit_log($userId, 'recovery_password_reset', 'Password reset via recovery', 'success', [
         'module' => 'auth',

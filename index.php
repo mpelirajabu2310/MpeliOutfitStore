@@ -11,7 +11,18 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';");
 
-$timestamp = time();
+// Asset versioning: derive each local asset's cache-buster from the file's
+// mtime so the URL changes EXACTLY when the file changes. This is the correct
+// pairing with the 30-day `Cache-Control: immutable` header in .htaccess and
+// replaces the old `?v=time()` + manual `&bust=` scheme, which stayed constant
+// on same-second reloads and was left stale by version bumps (JS files were
+// stuck at bust=9/bust=1 while CSS had moved to bust=10) — so browsers could
+// keep executing older chart code despite the fixes deployed underneath.
+$assetVersion = static function (string $path): string {
+    $full = __DIR__ . '/' . $path;
+    $mtime = is_file($full) ? filemtime($full) : false;
+    return ($mtime === false) ? 'm' . time() : 'm' . $mtime;
+};
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,17 +32,17 @@ $timestamp = time();
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title data-i18n="app.title">mpeli Outfit Store | Clothing Shop Management</title>
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16x16.png?v=<?php echo $timestamp; ?>" />
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon.png?v=<?php echo $timestamp; ?>" />
-  <link rel="icon" type="image/png" sizes="48x48" href="assets/images/favicon-48x48.png?v=<?php echo $timestamp; ?>" />
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/images/favicon-192.png?v=<?php echo $timestamp; ?>" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/images/apple-touch-icon.png?v=<?php echo $timestamp; ?>" />
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/images/favicon-16x16.png?v=<?php echo $assetVersion('assets/images/favicon-16x16.png'); ?>" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/images/favicon.png?v=<?php echo $assetVersion('assets/images/favicon.png'); ?>" />
+  <link rel="icon" type="image/png" sizes="48x48" href="assets/images/favicon-48x48.png?v=<?php echo $assetVersion('assets/images/favicon-48x48.png'); ?>" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/images/favicon-192.png?v=<?php echo $assetVersion('assets/images/favicon-192.png'); ?>" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/images/apple-touch-icon.png?v=<?php echo $assetVersion('assets/images/apple-touch-icon.png'); ?>" />
   <meta name="theme-color" content="#12110f" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=<?php echo $timestamp; ?>&bust=9" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=<?php echo $assetVersion('assets/css/styles.css'); ?>" />
 </head>
 <body>
   <div class="splash-screen" id="splashScreen">
@@ -74,6 +85,7 @@ $timestamp = time();
     </section>
 
     <section class="login-panel" aria-label="Admin login" data-i18n-aria-label="aria.adminLogin">
+      <div class="login-card-wrap">
       <form class="login-card" id="loginForm" autocomplete="off">
         <div class="login-logo-center">
           <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
@@ -106,6 +118,7 @@ $timestamp = time();
         <button type="submit" data-i18n="login.signIn"><i class="bi bi-box-arrow-in-right"></i> <span class="btn-text">Sign in</span><span class="btn-loading-text">Signing in...</span></button>
         <p class="login-recovery-hint"><a href="api/recover_owner.php" id="recoveryLink"><i class="bi bi-question-circle"></i> Lost access? Recovery</a></p>
       </form>
+      </div>
       <form class="login-card setup-card hidden" id="ownerSetupForm" autocomplete="off">
         <div class="login-logo-center">
           <img src="assets/images/logo.png" alt="Mpeli Outfit Store" class="login-logo-circle">
@@ -297,6 +310,24 @@ $timestamp = time();
                 <p data-i18n="saleDetails.loading">Loading sale details...</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- All Sales View Modal -->
+        <div class="modal-overlay hidden" id="allSalesModal">
+          <div class="modal-dialog all-sales-dialog">
+            <div class="modal-head">
+              <h3 data-i18n="allSales.title">All Sales</h3>
+              <button type="button" class="reset-close" id="allSalesClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="all-sales-info" id="allSalesInfo"></div>
+            <div class="all-sales-body" id="allSalesBody">
+              <div class="sale-details-loading">
+                <div class="sale-details-spinner"></div>
+                <p data-i18n="saleDetails.loading">Loading sale details...</p>
+              </div>
+            </div>
+            <div class="all-sales-pagination" id="allSalesPagination"></div>
           </div>
         </div>
       </main>
@@ -970,6 +1001,17 @@ $timestamp = time();
             <input type="text" id="maintenanceMessageInput" value="System is under maintenance. Please try again later." data-i18n-placeholder="settings.maintenanceMessage" />
             <button class="gold-button" type="button" id="saveMaintenanceButton" data-i18n="settings.saveMaintenance"><i class="bi bi-tools"></i> Save maintenance settings</button>
           </article>
+          <article class="panel settings-card owner-only">
+            <h3 data-i18n="systemReset.title">System Reset</h3>
+            <p class="form-hint" data-i18n="systemReset.summary">Clear all business data (products, sales, expenses, customers, categories, inventory and uploads) while preserving user accounts, roles, permissions, system settings and database schema.</p>
+            <ul class="system-reset-list">
+              <li data-i18n="systemReset.clears">Clears: products, sales, expenses, customers, categories, promotions, inventory and product images</li>
+              <li data-i18n="systemReset.preserves">Preserves: user accounts, roles, permissions, settings and schema</li>
+              <li data-i18n="systemReset.backupNote">A full safety backup is created automatically before the reset.</li>
+            </ul>
+            <button class="danger-button" type="button" id="openSystemResetModal"><i class="bi bi-exclamation-triangle-fill"></i> <span data-i18n="systemReset.open">Reset System Data</span></button>
+            <p class="form-hint" id="systemResetCardMessage" role="status"></p>
+          </article>
         </section>
         <div class="settings-actions">
           <p class="form-hint" id="settingsMessage" role="status"></p>
@@ -1256,6 +1298,49 @@ $timestamp = time();
     </div>
   </div>
 
+  <!-- System Reset confirmation modal (multi-step) -->
+  <div class="modal-overlay hidden" id="systemResetModal">
+    <div class="modal-dialog restore-dialog">
+      <div class="modal-head">
+        <h3 data-i18n="systemReset.title">System Reset</h3>
+        <button type="button" class="reset-close" id="systemResetClose" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      </div>
+
+      <!-- Step 1: warning -->
+      <div class="restore-warning" id="systemResetStep1">
+        <div class="restore-warning-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+        <div>
+          <strong data-i18n="systemReset.warningTitle">WARNING: This will permanently erase all business data.</strong>
+          <p class="restore-warning-text" data-i18n="systemReset.warningText">All products, sales, expenses, customers, categories, promotions, inventory movements and product images will be permanently deleted. A full safety backup is created first. User accounts, roles, permissions and settings are preserved. This action cannot be undone.</p>
+        </div>
+      </div>
+      <div class="restore-step" id="systemResetStep1Body">
+        <label class="restore-confirm-check">
+          <input type="checkbox" id="systemResetConfirmCheck1" />
+          <span data-i18n="systemReset.confirm1">I understand this permanently deletes all business data and cannot be undone.</span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost-button" id="systemResetCancel">Cancel</button>
+        <button type="button" class="gold-button" id="systemResetContinueBtn" disabled><i class="bi bi-arrow-right"></i> Continue</button>
+      </div>
+
+      <!-- Step 2: summary + typed phrase -->
+      <div class="restore-step hidden" id="systemResetStep2">
+        <div class="restore-details" id="systemResetDetails"></div>
+        <label class="restore-confirm-check" for="systemResetPhrase">
+          <span data-i18n="systemReset.phraseLabel">Type RESET SYSTEM to confirm:</span>
+        </label>
+        <input type="text" id="systemResetPhrase" autocomplete="off" spellcheck="false" placeholder="RESET SYSTEM" />
+        <p class="form-hint" id="systemResetMessage" role="status"></p>
+      </div>
+      <div class="modal-actions" id="systemResetStep2Actions">
+        <button type="button" class="ghost-button" id="systemResetBack">Back</button>
+        <button type="button" class="danger-button" id="systemResetExecuteBtn" disabled><i class="bi bi-exclamation-octagon-fill"></i> RESET SYSTEM</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Idle session warning modal -->
   <div class="modal-overlay hidden" id="idleWarningModal" role="alertdialog" aria-modal="true" aria-labelledby="idleWarningTitle" aria-describedby="idleWarningText">
     <div class="modal-dialog idle-dialog">
@@ -1279,14 +1364,14 @@ $timestamp = time();
   </div>
 
   <!-- amCharts 5 (self-hosted, served from 'self' to remain CSP-safe) -->
-  <script src="assets/js/amcharts/index.js?v=<?php echo $timestamp; ?>"></script>
-  <script src="assets/js/amcharts/xy.js?v=<?php echo $timestamp; ?>"></script>
-  <script src="assets/js/amcharts/percent.js?v=<?php echo $timestamp; ?>"></script>
-  <script src="assets/js/amcharts/themes/Animated.js?v=<?php echo $timestamp; ?>"></script>
+  <script src="assets/js/amcharts/index.js?v=<?php echo $assetVersion('assets/js/amcharts/index.js'); ?>"></script>
+  <script src="assets/js/amcharts/xy.js?v=<?php echo $assetVersion('assets/js/amcharts/xy.js'); ?>"></script>
+  <script src="assets/js/amcharts/percent.js?v=<?php echo $assetVersion('assets/js/amcharts/percent.js'); ?>"></script>
+  <script src="assets/js/amcharts/themes/Animated.js?v=<?php echo $assetVersion('assets/js/amcharts/themes/Animated.js'); ?>"></script>
   <!-- Mpeli Outfit Store chart layer -->
-  <script src="assets/js/chart-utils.js?v=<?php echo $timestamp; ?>&bust=1"></script>
-  <script src="assets/js/dashboard-charts.js?v=<?php echo $timestamp; ?>&bust=1"></script>
-  <script src="assets/js/business-analysis-charts.js?v=<?php echo $timestamp; ?>&bust=1"></script>
-  <script src="assets/js/script.js?v=<?php echo $timestamp; ?>&bust=9"></script>
+  <script src="assets/js/chart-utils.js?v=<?php echo $assetVersion('assets/js/chart-utils.js'); ?>"></script>
+  <script src="assets/js/dashboard-charts.js?v=<?php echo $assetVersion('assets/js/dashboard-charts.js'); ?>"></script>
+  <script src="assets/js/business-analysis-charts.js?v=<?php echo $assetVersion('assets/js/business-analysis-charts.js'); ?>"></script>
+  <script src="assets/js/script.js?v=<?php echo $assetVersion('assets/js/script.js'); ?>"></script>
 </body>
 </html>

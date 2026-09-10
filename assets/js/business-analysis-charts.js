@@ -1,5 +1,5 @@
-﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
- * Mpeli Outfit Store â€” Business Analysis amCharts 5
+/* ============================================================
+ * Mpeli Outfit Store - Business Analysis amCharts 5
  *
  * Builds the amCharts 5 visualizations for Business Analytics:
  *   VIEW 1 (Performance Overview): Sales/Revenue Trend, Profit vs Expenses Trend
@@ -7,7 +7,7 @@
  * Plus the per-seller and per-product trend charts.
  *
  * All data is real, returned by api/analytics.php.
- * â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+ * ============================================================ */
 (function (global) {
   "use strict";
 
@@ -155,6 +155,11 @@
   function renderSalesTrend(container, trend) {
     if (!container || !M.am5 || !M.am5xy) return null;
     const rows = buildDateRows(trend, "sale_day");
+    if (!rows.length) {
+      M.disposeRoot(container);
+      M.showChartEmpty(container, "No data available for the selected period.");
+      return null;
+    }
     const { root } = M.safeRoot(container, ["xy"]);
     if (!root) return null;
 
@@ -229,6 +234,11 @@
   function renderProfitTrend(container, trend) {
     if (!container || !M.am5 || !M.am5xy) return null;
     const rows = buildDateRows(trend, "date");
+    if (!rows.length) {
+      M.disposeRoot(container);
+      M.showChartEmpty(container, "No data available for the selected period.");
+      return null;
+    }
     const { root } = M.safeRoot(container, ["xy"]);
     if (!root) return null;
 
@@ -391,6 +401,11 @@
   function renderSellerTrend(container, trend) {
     if (!container || !M.am5 || !M.am5xy) return null;
     const rows = buildDateRows(trend, "date");
+    if (!rows.length) {
+      M.disposeRoot(container);
+      M.showChartEmpty(container, "No data available for the selected period.");
+      return null;
+    }
     const { root } = M.safeRoot(container, ["xy"]);
     if (!root) return null;
     const am5 = M.am5, xy = M.am5xy;
@@ -407,6 +422,11 @@
   function renderProductTrend(container, trend) {
     if (!container || !M.am5 || !M.am5xy) return null;
     const rows = buildDateRows(trend, "sale_day");
+    if (!rows.length) {
+      M.disposeRoot(container);
+      M.showChartEmpty(container, "No data available for the selected period.");
+      return null;
+    }
     const { root } = M.safeRoot(container, ["xy"]);
     if (!root) return null;
     const am5 = M.am5, xy = M.am5xy;

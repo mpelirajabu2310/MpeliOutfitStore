@@ -156,7 +156,6 @@ class BackupService
         return [
             'storage_location' => $this->storageLabel(),
             'storage_outside_webroot' => $this->isOutsideWebRoot(),
-            'backup_dir'       => $this->backupDir,
             'last_database'    => $lastDb,
             'last_files'       => $lastFiles,
             'last_full'        => $lastFull,
@@ -494,7 +493,7 @@ class BackupService
                 $this->db->exec('SET FOREIGN_KEY_CHECKS = 1');
             } catch (Throwable $e) {
                 error_log('[backup] restore failed: ' . $e->getMessage());
-                return ['success' => false, 'message' => 'Restore failed: ' . $e->getMessage()];
+                return ['success' => false, 'message' => 'Restore failed. Please check the backup file and try again. Consult the server log for details.'];
             }
 
             $this->writeState(['last_restore_at' => date('Y-m-d H:i:s'), 'last_restore_file' => $filename]);

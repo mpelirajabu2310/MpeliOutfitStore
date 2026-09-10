@@ -16,7 +16,8 @@ $inventoryService = new InventoryService();
 
 $threshold = low_stock_threshold($pdo);
 
-$totalStock = $inventoryService->getTotalStockValue();
+$totalRemainingStock = $inventoryService->getTotalRemainingStock();
+$inventoryValue = $inventoryService->getTotalInventoryValue();
 $lowStock = $inventoryService->getStockByStatus('low_stock', $threshold);
 $outOfStock = $inventoryService->getStockByStatus('out_of_stock', $threshold);
 $allProducts = $inventoryService->getAllStockSummary();
@@ -27,7 +28,8 @@ respond([
     'success' => true,
     'low_stock_threshold' => $threshold,
     'stats' => [
-        'total_stock' => $totalStock,
+        'total_stock' => $totalRemainingStock,
+        'inventory_value' => $inventoryValue,
         'low_stock' => $lowStock,
         'out_of_stock' => $outOfStock,
     ],

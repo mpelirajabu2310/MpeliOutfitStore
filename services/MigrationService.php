@@ -30,7 +30,8 @@ class MigrationService
     public function createBackup(string $reason = 'pre_migration'): array
     {
         $timestamp = date('Y-m-d_H-i-s');
-        $backupFile = $this->backupDir . "/backup_{$reason}_{$timestamp}.sql";
+        $safeReason = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $reason);
+        $backupFile = $this->backupDir . "/backup_{$safeReason}_{$timestamp}.sql";
 
         $tables = $this->getAllTables();
         $sql = "-- MpeliOutFitStore Database Backup\n";
@@ -127,11 +128,22 @@ class MigrationService
 
     public function identifyAffectedRecords(string $fieldName, string $table): array
     {
+        $validTables = $this->getAllowedIdentifiers();
+        if (!isset($validTables[$table])) {
+            return ['error' => 'Invalid table name.'];
+        }
+        $validFields = $validTables[$table];
+        if (!in_array($fieldName, $validFields, true)) {
+            return ['error' => 'Invalid field name for table.'];
+        }
+
         try {
-            $stmt = $this->db->query("SELECT COUNT(*) AS total FROM `{$table}` WHERE `{$fieldName}` IS NULL");
+            $stmt = $this->db->prepare("SELECT COUNT(*) AS total FROM `{$table}` WHERE `{$fieldName}` IS NULL");
+            $stmt->execute();
             $total = (int)$stmt->fetchColumn();
 
-            $stmt2 = $this->db->query("SELECT COUNT(*) AS total FROM `{$table}` WHERE `{$fieldName}` IS NOT NULL");
+            $stmt2 = $this->db->prepare("SELECT COUNT(*) AS total FROM `{$table}` WHERE `{$fieldName}` IS NOT NULL");
+            $stmt2->execute();
             $withValue = (int)$stmt2->fetchColumn();
 
             return [
@@ -219,6 +231,15 @@ class MigrationService
 
     public function assignLegacyRecords(string $table, string $ownerField, int $ownerId): array
     {
+        $validTables = $this->getAllowedIdentifiers();
+        if (!isset($validTables[$table])) {
+            throw new RuntimeException('Invalid table name.');
+        }
+        $validFields = $validTables[$table];
+        if (!in_array($ownerField, $validFields, true)) {
+            throw new RuntimeException('Invalid field name for table.');
+        }
+
         $stmt = $this->db->prepare(
             "UPDATE `{$table}` SET `{$ownerField}` = :owner_id WHERE `{$ownerField}` IS NULL"
         );
@@ -310,7 +331,7 @@ class MigrationService
         }
         $htaccess = $this->backupDir . '/.htaccess';
         if (!is_file($htaccess)) {
-            @file_put_contents($htaccess, "Deny from all\n");
+            @file_put_contents($htaccess, "Require all denied\n");
         }
     }
 
@@ -319,5 +340,26 @@ class MigrationService
         $timestamp = date('Y-m-d H:i:s');
         $logLine = "[{$timestamp}] [migration] [{$event}] {$details}" . PHP_EOL;
         @file_put_contents($this->logDir . '/migration.log', $logLine, FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * Whitelist of allowed table/field identifiers for dynamic queries.
+     * Prevents SQL injection from caller-supplied identifiers.
+     */
+    private function getAllowedIdentifiers(): array
+    {
+        return [
+            'users'              => ['created_by', 'updated_by', 'owner_id', 'assigned_to'],
+            'products'           => ['created_by', 'updated_by', 'owner_id'],
+            'product_variants'   => ['product_id', 'size_id', 'color_id'],
+            'sales'              => ['sold_by', 'created_by', 'owner_id', 'customer_id'],
+            'sale_items'         => ['sale_id', 'product_id', 'variant_id'],
+            'expenses'           => ['created_by', 'owner_id'],
+            'customers'          => ['created_by', 'owner_id'],
+            'categories'         => ['created_by'],
+            'shop_settings'      => ['updated_by'],
+            'inventory_movements'=> ['variant_id', 'created_by'],
+            'payments'           => ['sale_id', 'created_by'],
+        ];
     }
 }

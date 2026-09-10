@@ -58,10 +58,36 @@
   --login-overlay-light: rgba(17,16,14,.28);
   --login-text-muted: rgba(255,255,255,.78);
 
-  --theme-transition: .3s ease;
+--theme-transition: .3s ease;
   --font-heading: 'Poppins', sans-serif;
   --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-family: var(--font-body);
+
+  /* ── Border & focus design tokens ─────────────────────────────────────
+     Single source of truth for the modernized border language.
+     Every component below references these so light/dark stay in sync. */
+  --border-default: var(--border);            /* resting container edges */
+  --border-subtle: rgba(201,162,78,.16);      /* soft card/modal outlines */
+  --border-hover: rgba(201,162,78,.45);       /* interactive edges on hover */
+  --border-focus: var(--gold);                /* focused edge (kept on dark) */
+  --border-strong: var(--gold-dark);          /* emphasized accents */
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  --ring-focus: 0 0 0 3px var(--gold-focus);
+  --ring-focus-strong: 0 0 0 3px var(--gold-focus), 0 0 0 1px var(--gold);
+  --ring-offset: 2px;
+
+  --shadow-sm: 0 1px 2px var(--shadow);
+  --shadow-md: 0 4px 14px var(--shadow);
+  --shadow-lg: 0 16px 40px -12px var(--shadow-heavy);
+  --shadow-card: 0 1px 2px var(--shadow), 0 10px 28px -16px var(--shadow-heavy);
+  --control-height: 44px;
 }
 
 body.dark {
@@ -96,7 +122,23 @@ body.dark {
   --gold-focus: rgba(201,162,78,.12);
   --gold-shadow: rgba(0,0,0,.3);
 
-  --topbar-bg: rgba(17,16,14,.88);
+--topbar-bg: rgba(17,16,14,.88);
+
+  --border-subtle: rgba(255,255,255,.07);
+  --border-hover: rgba(201,162,78,.42);
+
+  /* Re-declare token aliases here so they re-resolve against dark values.
+     (Custom properties referencing other custom properties freeze their
+     substitution at the element where they are declared, so :root aliases
+     would otherwise lock in the light palette.) */
+  --border-default: var(--border);
+  --border-strong: var(--gold-dark);
+  --shadow-sm: 0 1px 2px var(--shadow);
+  --shadow-md: 0 4px 14px var(--shadow);
+  --shadow-lg: 0 16px 40px -12px var(--shadow-heavy);
+  --shadow-card: 0 1px 2px var(--shadow), 0 10px 28px -16px var(--shadow-heavy);
+  --ring-focus: 0 0 0 3px var(--gold-focus);
+  --ring-focus-strong: 0 0 0 3px var(--gold-focus), 0 0 0 1px var(--gold);
 }
 
 * { box-sizing: border-box; }
@@ -337,25 +379,41 @@ label {
   font-weight: 800;
 }
 
-input, select {
+input, select, textarea {
   width: 100%;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-sm);
   padding: 12px 14px;
   color: var(--text);
   background: var(--input-bg);
   outline: none;
-  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
   font-size: 15px;
 }
 
-input:hover, select:hover {
-  border-color: var(--gold-border);
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.5;
 }
 
-input:focus, select:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px var(--gold-focus), 0 2px 8px rgba(201,162,78,.12);
+input::placeholder, textarea::placeholder { color: var(--text-secondary); opacity: .75; }
+
+input:hover:not(:disabled):not([readonly]),
+select:hover:not(:disabled):not([readonly]),
+textarea:hover:not(:disabled):not([readonly]) {
+  border-color: var(--border-hover);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--border-focus);
+  box-shadow: var(--ring-focus);
+}
+
+input:disabled, select:disabled, textarea:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  background: var(--surface-alt);
 }
 
 .login-card button, .gold-button {
@@ -851,9 +909,17 @@ input:focus, select:focus {
   align-items: center;
   gap: 12px;
   padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   background: var(--input-bg);
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+/* Modern focus treatment: the whole search field lights up as one unit –
+   subtle border darkening + soft gold ring, no browser-default rectangle. */
+.search-box:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: var(--ring-focus);
 }
 
 .search-box span {
@@ -866,6 +932,13 @@ input:focus, select:focus {
 .search-box input {
   border: 0;
   box-shadow: none;
+  outline: none;
+}
+
+.search-box input:focus,
+.search-box input:focus-visible {
+  box-shadow: none;
+  outline: none;
 }
 
 .admin-profile {
@@ -2503,15 +2576,8 @@ body.sidebar-open { overflow: hidden; }
   flex-shrink: 0;
 }
 
-/* Form input modern styling (Bootstrap-like) */
-input, select, textarea {
-  transition: border-color .2s ease, box-shadow .2s ease;
-}
-
-input:focus, select:focus, textarea:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px var(--gold-focus), 0 2px 8px rgba(201,162,78,.12);
-}
+/* Form input modern styling – consolidated in the `input, select, textarea`
+   base rule above (borders, hover, focus ring, disabled states). */
 
 .input-icon-wrap {
   position: relative;
@@ -2589,10 +2655,7 @@ input:focus, select:focus, textarea:focus {
   font-size: 16px;
 }
 
-/* Search box modern */
-.search-box {
-  transition: border-color .2s ease;
-}
+/* Search box modern – focus treatment lives on `.search-box:focus-within` above. */
 
 /* Card actions modern */
 .card-actions button {
@@ -3150,6 +3213,8 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   padding: 16px 20px 20px;
   max-height: 65vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .sale-details-loading {
@@ -3194,6 +3259,7 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
 .receipt-brand {
   text-align: center;
   margin-bottom: 12px;
+  max-width: 100%;
 }
 
 .receipt-logo {
@@ -3211,6 +3277,9 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   letter-spacing: 0.5px;
   margin-bottom: 4px;
   color: var(--text);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .receipt-contact {
@@ -3221,6 +3290,10 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   align-items: center;
   justify-content: center;
   gap: 4px;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .receipt-contact i {
@@ -3257,6 +3330,9 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   font-weight: 600;
   text-align: right;
   color: var(--text);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .receipt-items-table {
@@ -3264,6 +3340,7 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   border-collapse: collapse;
   font-size: 13px;
   margin: 8px 0;
+  table-layout: fixed;
 }
 
 .receipt-items-table thead th {
@@ -3275,6 +3352,8 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   letter-spacing: 0.3px;
   padding: 6px 4px;
   border-bottom: 1px solid var(--border);
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .receipt-items-table thead th.receipt-col-center {
@@ -3290,6 +3369,23 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   border-bottom: 1px solid var(--surface-alt);
   vertical-align: top;
   color: var(--text);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.receipt-items-table tbody td:first-child {
+  width: 45%;
+}
+
+.receipt-items-table tbody td:nth-child(2) {
+  width: 7%;
+}
+
+.receipt-items-table tbody td:nth-child(3),
+.receipt-items-table tbody td:nth-child(4),
+.receipt-items-table tbody td:nth-child(5) {
+  width: 16%;
 }
 
 .receipt-items-table td.receipt-col-center {
@@ -3317,6 +3413,7 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
 
 .receipt-summary {
   margin: 8px 0;
+  max-width: 100%;
 }
 
 .receipt-summary-row {
@@ -3326,11 +3423,18 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   padding: 4px 0;
   font-size: 13px;
   color: var(--text-secondary);
+  gap: 12px;
+  min-width: 0;
 }
 
 .receipt-summary-row span:last-child {
   font-weight: 500;
   color: var(--text);
+  text-align: right;
+  margin-left: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .receipt-summary-discount span:last-child {
@@ -3367,6 +3471,7 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
 .receipt-footer-area {
   text-align: center;
   margin-top: 12px;
+  max-width: 100%;
 }
 
 .receipt-footer-message {
@@ -3374,6 +3479,8 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
   color: var(--text-secondary);
   margin-bottom: 6px;
   font-style: italic;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .receipt-thankyou {
@@ -3410,6 +3517,13 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
 
 .receipt-action-btn i {
   margin-right: 4px;
+}
+
+.receipt-print-area {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 /* ── Print Styles ───────────────────────────────────────────────────── */
@@ -3670,6 +3784,282 @@ select { min-height: 44px; -webkit-appearance: auto; appearance: auto; }
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── All Sales View Modal ───────────────────────────────────────────── */
+.all-sales-dialog {
+  width: min(880px, 95vw);
+  max-width: 880px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.all-sales-dialog .modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.all-sales-dialog .modal-head h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.all-sales-dialog .modal-head h3 i {
+  margin-right: 6px;
+  color: var(--gold);
+}
+
+.all-sales-dialog .reset-close {
+  position: static;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.all-sales-dialog .reset-close:hover {
+  color: var(--text);
+  background: var(--surface-alt);
+}
+
+.all-sales-info {
+  padding: 10px 20px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.all-sales-body {
+  padding: 12px 20px 8px;
+  max-height: 62vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.all-sales-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.all-sales-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.all-sales-table thead th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.all-sales-table tbody td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--surface-alt);
+  vertical-align: middle;
+  color: var(--text);
+}
+
+.all-sales-table tbody tr:hover {
+  background: var(--surface-alt);
+}
+
+.all-sales-receipt {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.all-sales-datetime small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.all-sales-seller,
+.all-sales-customer {
+  max-width: 160px;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.all-sales-amount {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.all-sales-profit {
+  white-space: nowrap;
+}
+
+.all-sales-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.all-sales-empty i {
+  font-size: 36px;
+  color: var(--border);
+}
+
+.all-sales-cards {
+  display: none;
+}
+
+.all-sales-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.all-sales-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.all-sales-card-receipt {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.all-sales-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.all-sales-card-row span:last-child {
+  font-weight: 500;
+  color: var(--text);
+  text-align: right;
+  margin-left: 12px;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.all-sales-card-amount {
+  font-weight: 700;
+  color: var(--text) !important;
+}
+
+.all-sales-card-profit {
+  color: var(--accent-green, #27ae60);
+  font-weight: 600;
+}
+
+.all-sales-card-actions {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-alt);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.all-sales-pagination {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pagination-controls .pagination-active {
+  border-color: var(--gold);
+  background: var(--gold-bg, rgba(196, 158, 60, 0.15));
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .all-sales-dialog {
+    width: 96vw;
+    max-width: 96vw;
+  }
+
+  .all-sales-table {
+    min-width: 720px;
+  }
+}
+
+@media (max-width: 640px) {
+  .all-sales-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+    max-height: 100vh;
+    max-height: 100dvh;
+    align-self: center;
+  }
+
+  .all-sales-dialog .modal-head {
+    padding: 10px 14px;
+  }
+
+  .all-sales-dialog .modal-head h3 {
+    font-size: 15px;
+  }
+
+  .all-sales-info {
+    padding: 8px 14px 0;
+    font-size: 12px;
+  }
+
+  .all-sales-body {
+    padding: 10px 14px 8px;
+    max-height: calc(100vh - 120px);
+    max-height: calc(100dvh - 120px);
+  }
+
+  .all-sales-pagination {
+    padding: 10px 14px 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 640px) {
+  .all-sales-table-wrap {
+    display: none;
+  }
+  .all-sales-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media print {
+  .all-sales-dialog {
+    display: none;
   }
 }
 
@@ -4490,10 +4880,12 @@ body.dark .backup-type-badge.type-full { background: var(--badge-danger-bg); col
 }
 .bi-chart-canvas {
   position: relative;
+  width: 100%;
+  height: 400px;
 }
 .bi-chart-canvas .amcharts-chart {
   width: 100%;
-  height: 400px;
+  height: 100%;
 }
 
 /* Dashboard bar-chart grid should no longer force 7 columns for amCharts. */
@@ -4604,11 +4996,11 @@ body.dark .backup-type-badge.type-full { background: var(--badge-danger-bg); col
 }
 @media (max-width: 900px) {
   .bi-trend-grid { grid-template-columns: 1fr; }
-  .bi-chart-canvas .amcharts-chart { height: 360px; }
+  .bi-chart-canvas { height: 360px; }
   .revenue-chart, .profit-chart { height: 300px; }
 }
 @media (max-width: 620px) {
-  .bi-chart-canvas .amcharts-chart { height: 320px; }
+  .bi-chart-canvas { height: 320px; }
   .revenue-chart, .profit-chart { height: 280px; }
   .bi-view-btn { padding: 8px 14px; font-size: 13px; }
 }
@@ -4623,4 +5015,294 @@ body.dark .backup-type-badge.type-full { background: var(--badge-danger-bg); col
   font-family: var(--font-body);
   font-size: 13px;
   padding: 6px 10px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   UI/UX MODERNIZATION — Border & Component Design System
+   Applies the tokens defined in :root across every surface below.
+   Ordering matters: this section sits last so ties resolve to these rules,
+   with dedicated mobile re-asserts where a smaller radius is intentional.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Keyboard focus — one accessible ring everywhere ──────────────── */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: var(--ring-offset);
+}
+
+/* Text controls show the ring through box-shadow (rounded, matches radius),
+   so the rectangular browser outline is intentionally suppressed. The ring
+   is a 3px shape + border-color change — an accessible non-color indicator. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus-strong);
+}
+
+/* Search input: its container already lights up via :focus-within. */
+.search-box input:focus-visible { box-shadow: none; }
+
+/* ── 2. Inputs — consistency details ----------------------------------- */
+/* Never let the global width:100% stretch checkboxes/radios. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 0;
+  cursor: pointer;
+}
+input[type="range"] { accent-color: var(--gold); }
+
+input[type="file"]::file-selector-button {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  background: var(--surface-alt);
+  color: var(--text);
+  padding: 8px 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color .2s ease, border-color .2s ease, color .2s ease;
+}
+input[type="file"]::file-selector-button:hover {
+  background: var(--hover-bg);
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+/* ── 3. Buttons — shared language, purpose-kept variants ----------------- */
+.gold-button, .ghost-button, .logout-button, .danger-button, .search-icon-btn {
+  min-height: 42px;
+  border-radius: var(--radius-sm);
+}
+
+.gold-button {
+  box-shadow: 0 4px 16px var(--gold-shadow);
+}
+
+.ghost-button, .logout-button {
+  transition: border-color .2s ease, background-color .2s ease,
+              color .2s ease, transform .15s ease, box-shadow .2s ease;
+}
+
+.ghost-button:hover:not(:disabled),
+.logout-button:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-alt);
+}
+
+.ghost-button:active, .logout-button:active {
+  transform: scale(.97);
+}
+
+.ghost-button:disabled, .logout-button:disabled, .gold-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.logout-button {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.logout-button:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--badge-danger-bg);
+}
+
+/* Compact ghosts (table row actions, receipt actions, pagination) */
+.card-actions button,
+.backup-actions-cell .ghost-button,
+.receipt-action-btn,
+.pagination-controls .ghost-button {
+  min-height: 36px;
+  border-radius: var(--radius-xs);
+}
+
+.pagination-controls button {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--text);
+  min-width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color .2s ease, background-color .2s ease;
+}
+.pagination-controls button:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-alt);
+}
+.pagination-controls button:disabled { opacity: .45; cursor: not-allowed; }
+
+.search-icon-btn {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color .2s ease, border-color .2s ease, color .2s ease;
+}
+.search-icon-btn:hover { background: var(--hover-bg); border-color: var(--border-hover); color: var(--text); }
+
+/* ── 4. Cards, panels, tiles — hierarchy without heavy boxes ------------ */
+.stat-card, .panel, .product-card, .promo-card, .backup-action-card,
+.bi-kpi-card, .bi-chart-panel, .bi-flow-card, .health-check-item,
+.restore-details, .bulk-discount-wrap, .promo-product-picker {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.stat-card, .panel, .product-card, .bi-kpi-card, .bi-chart-panel,
+.backup-action-card, .promo-card {
+  box-shadow: var(--shadow-card);
+}
+
+.stat-card { border-radius: var(--radius-md); }
+.stat-card.warning { border-color: var(--warning-border); }
+.stat-card.danger { border-color: var(--danger-border); }
+
+.bi-kpi-card:hover {
+  border-color: var(--border-hover);
+}
+
+.health-check-item { border-radius: var(--radius-sm); }
+.health-check-item.pass { border-color: rgba(45,124,89,.35); }
+.health-check-item.fail { border-color: rgba(184,76,67,.35); }
+.health-check-item.warn { border-color: rgba(201,162,78,.35); }
+
+.sidebar-feature { border-radius: var(--radius-sm); }
+
+/* ── 5. Tables — hierarchy over gridlines -------------------------------- */
+table, .report-table, .bi-table, .audit-table, .backup-table, .receipt-items-table {
+  border-collapse: collapse;
+}
+
+th {
+  letter-spacing: .04em;
+}
+
+table tbody tr:hover td {
+  background: var(--hover-bg);
+}
+
+.report-table th, .report-table td { border-bottom: 1px solid var(--border-default); }
+
+/* ── 6. Modals & dialogs — one refined shell --------------------------- */
+.modal-dialog, .reset-dialog, .sale-details-dialog, .audit-detail-dialog,
+.backup-detail-dialog, .restore-dialog, .modal-dialog.wizard-dialog {
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 24px 70px -24px var(--shadow-heavy), var(--shadow-lg);
+}
+.modal-dialog, .reset-dialog { border-radius: var(--radius-lg); }
+
+.report-output {
+  border: 1px solid var(--border-default);
+}
+
+/* ── 7. Dropdown / select / filter controls ----------------------------- */
+.user-dropdown {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 16px 44px -16px var(--shadow-heavy), var(--shadow-lg);
+}
+.dropdown-item { border-radius: var(--radius-xs); }
+.dropdown-item:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+
+.bi-view-switcher {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  padding: 4px;
+}
+.bi-view-btn { border-radius: var(--radius-sm); }
+
+.bi-date-filter {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+.bi-period-btn, .bi-sort-btn, .bi-seller-select, .language-switcher {
+  border-radius: var(--radius-sm);
+  min-height: 38px;
+}
+.bi-period-btn.active, .bi-sort-btn.active {
+  border-color: var(--gold);
+  box-shadow: 0 2px 8px var(--gold-shadow);
+}
+
+.bi-tab:focus-visible,
+.bi-view-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+/* Accessible focus for clickable radio "cards" */
+.wizard-radio:focus-within,
+.wizard-cat:focus-within,
+.restore-confirm-check:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: var(--ring-focus);
+}
+.wizard-radio, .wizard-cat { border-radius: var(--radius-sm); }
+
+/* ── 8. Login / registration -------------------------------------------- */
+.login-card {
+  border: 1px solid var(--gold-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 70px -20px var(--shadow-heavy), 0 0 0 1px var(--gold-focus);
+}
+.input-icon-wrap { border-radius: var(--radius-sm); }
+.input-icon-wrap input, .input-icon-wrap select { border-radius: var(--radius-sm); }
+
+/* ── 9. Charts & analysis containers (do not touch amCharts internals) -- */
+.bar-chart, .line-chart, .revenue-chart, .profit-chart, .am-chart-state {
+  border-radius: var(--radius-sm);
+}
+.bi-chart-panel { padding: 18px 20px; }
+
+/* ── 10. Toast / status affinity ---------------------------------------- */
+.toast {
+  border: 1px solid rgba(255,255,255,.14);
+}
+.topbar-status { border: 1px solid var(--border-subtle); }
+
+/* ── 11. Misc compact surrounding boxes --------------------------------- */
+.best-sellers span, .product-meta span { border-radius: var(--radius-pill); }
+.promo-state, .stock-badge, .status, .role-badge,
+.backup-type-badge, .backup-status-badge, .bi-compare {
+  border-radius: var(--radius-pill);
+}
+
+/* ── Dark-mode refinements ---------------------------------------------- */
+body.dark .panel, body.dark .stat-card,
+body.dark .promo-card, body.dark .backup-action-card,
+body.dark .bi-kpi-card, body.dark .bi-chart-panel, body.dark .bi-flow-card {
+  border-color: #3a332a;
+}
+body.dark .search-box { background-color: var(--input-bg); }
+body.dark .login-card { border-color: var(--gold-border); }
+
+/* ── Intentional mobile radius re-asserts (match existing design) ------- */
+@media (max-width: 620px) {
+  .login-card { border-radius: var(--radius-lg); }
+}
+@media (max-width: 480px) {
+  .login-card, .modal-dialog, .reset-dialog, .audit-detail-dialog { border-radius: 12px; }
+}
+@media (max-width: 400px) {
+  .audit-detail-dialog { border-radius: 12px; }
+}
+@media (max-width: 360px) {
+  .login-card, .modal-dialog, .reset-dialog, .audit-detail-dialog { border-radius: 10px; }
+}
+/* Fullscreen receipt modal must stay perfectly square (existing behavior). */
+@media (max-width: 640px) {
+  .sale-details-dialog { border-radius: 0; }
 }

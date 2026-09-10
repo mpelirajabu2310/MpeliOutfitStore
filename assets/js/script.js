@@ -73,7 +73,7 @@ function clearCartState() {
   }
 }
 
-const KNOWN_PAGES = ["dashboard", "products", "sales", "expenses", "inventory", "reports", "analytics", "users", "audit", "backup", "settings"];
+const KNOWN_PAGES = ["dashboard", "products", "sales", "expenses", "promotions", "inventory", "reports", "analytics", "users", "audit", "backup", "settings"];
 
 function rememberPage(page) {
   if (!KNOWN_PAGES.includes(page)) return;
@@ -501,6 +501,10 @@ function productImageUrl(product) {
 }
 
 let productImgObserver = null;
+function safeBackgroundImage(el, url) {
+  if (typeof url !== "string" || !url || /["'\r\n\\]/.test(url)) return;
+  el.style.backgroundImage = `url("${url}")`;
+}
 function getProductImgObserver() {
   if (productImgObserver) return productImgObserver;
   if (!("IntersectionObserver" in window)) return null;
@@ -509,7 +513,7 @@ function getProductImgObserver() {
       if (!entry.isIntersecting) return;
       const el = entry.target;
       if (el.dataset.src) {
-        el.style.backgroundImage = `url("${el.dataset.src}")`;
+        safeBackgroundImage(el, el.dataset.src);
         delete el.dataset.src;
       }
       productImgObserver.unobserve(el);
@@ -523,7 +527,7 @@ function observeProductImages(container) {
   const observer = getProductImgObserver();
   if (!observer) {
     layers.forEach((el) => {
-      el.style.backgroundImage = `url("${el.dataset.src}")`;
+      safeBackgroundImage(el, el.dataset.src);
       delete el.dataset.src;
     });
     return;
@@ -539,7 +543,7 @@ function productCardHtml(product) {
     ? ""
     : `<span>${t("products.buying")} <strong>${money(product.buying)}</strong></span>`;
   const minPriceHtml = product.min_price > 0
-    ? `<span>Min sell <strong>${money(product.min_price)}</strong></span>`
+    ? `<span>${t("products.minSell") || "Min sell"} <strong>${money(product.min_price)}</strong></span>`
     : "";
   const actions = isOwner()
     ? `<div class="card-actions">
@@ -919,6 +923,10 @@ function renderSellerAnalytics(analytics) {
 // ── Sale Details Modal ──────────────────────────────────────────────
 function closeSaleDetailsModal() {
   document.querySelector("#saleDetailsModal")?.classList.add("hidden");
+  const allSalesModal = document.querySelector("#allSalesModal");
+  if (!allSalesModal || allSalesModal.classList.contains("hidden")) {
+    document.body.style.overflow = "";
+  }
 }
 
 document.querySelector("#saleDetailsModal")?.addEventListener("click", e => {
@@ -939,6 +947,7 @@ async function openSaleDetails(saleId) {
 
   content.innerHTML = `<div class="sale-details-loading"><div class="sale-details-spinner"></div><p>${t("saleDetails.loading")}</p></div>`;
   modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
 
   try {
     const payload = await apiRequest(`api/sale_details.php?id=${encodeURIComponent(saleId)}`);
@@ -1138,6 +1147,211 @@ function renderSaleDetailsContent(sale) {
   });
 }
 
+// ── All Sales View Modal ──────────────────────────────────────────────
+let allSalesCurrentPage = 1;
+const ALL_SALES_PER_PAGE = 20;
+
+function closeAllSalesModal() {
+  const modal = document.querySelector("#allSalesModal");
+  if (modal) modal.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+function openAllSalesModal() {
+  allSalesCurrentPage = 1;
+  const modal = document.querySelector("#allSalesModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+  loadAllSalesPage(1);
+}
+
+async function loadAllSalesPage(page) {
+  allSalesCurrentPage = page;
+  const body = document.querySelector("#allSalesBody");
+  const info = document.querySelector("#allSalesInfo");
+  const pagination = document.querySelector("#allSalesPagination");
+  if (!body) return;
+
+  body.innerHTML = `<div class="sale-details-loading"><div class="sale-details-spinner"></div><p>${t("saleDetails.loading")}</p></div>`;
+  if (info) info.textContent = "";
+  if (pagination) pagination.innerHTML = "";
+
+  try {
+    const payload = await apiRequest(`api/sales_all.php?page=${page}&per_page=${ALL_SALES_PER_PAGE}`);
+    if (!payload.success) {
+      body.innerHTML = `<div class="sale-details-error"><i class="bi bi-exclamation-triangle"></i><p>${escapeHtml(payload.message || t("allSales.error"))}</p><button class="ghost-button" onclick="loadAllSalesPage(${page})">${t("allSales.retry")}</button></div>`;
+      return;
+    }
+
+    const sales = payload.sales || [];
+    const total = payload.total || 0;
+    const totalPages = payload.total_pages || 1;
+
+    if (info) {
+      if (total === 0) {
+        info.textContent = "";
+      } else {
+        const start = (page - 1) * payload.per_page + 1;
+        const end = Math.min(page * payload.per_page, total);
+        info.textContent = t("allSales.showing", { from: start, to: end, total: total }) || `Showing ${start}–${end} of ${total}`;
+      }
+    }
+
+    if (sales.length === 0) {
+      body.innerHTML = `<div class="all-sales-empty"><i class="bi bi-receipt"></i><p>${t("allSales.noSales")}</p></div>`;
+      return;
+    }
+
+    const isOwner = currentUser && currentUser.role === "OWNER";
+
+    const rows = sales.map(sale => {
+      const saleDate = new Date(sale.sale_date);
+      const dateStr = saleDate.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+      const timeStr = saleDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      const profitCell = isOwner ? `<td class="all-sales-profit">${sale.total_profit === null ? t("role.hidden") : money(sale.total_profit)}</td>` : "";
+      return `
+        <tr>
+          <td class="all-sales-receipt">${escapeHtml(sale.receipt_number)}</td>
+          <td class="all-sales-datetime">${dateStr}<br><small>${timeStr}</small></td>
+          <td class="all-sales-seller">${escapeHtml(sale.seller_name)}</td>
+          <td class="all-sales-customer">${escapeHtml(translatedCustomerType(sale.customer_type))}</td>
+          <td class="all-sales-amount">${money(sale.total_amount)}</td>
+          ${profitCell}
+          <td><span class="status paid">${t(`status.${sale.payment_status}`)}</span></td>
+          <td><button class="ghost-button sale-view-btn" data-sale-id="${sale.sale_id}"><i class="bi bi-eye"></i> ${t("saleDetails.view")}</button></td>
+        </tr>`;
+    }).join("");
+
+    const profitHeader = isOwner ? `<th>${t("table.profit")}</th>` : "";
+
+    body.innerHTML = `
+      <div class="table-wrap all-sales-table-wrap">
+        <table class="all-sales-table">
+          <thead>
+            <tr>
+              <th>${t("table.receipt")}</th>
+              <th>${t("allSales.date")}</th>
+              <th>${t("allSales.seller")}</th>
+              <th>${t("table.customerType")}</th>
+              <th>${t("table.amount")}</th>
+              ${profitHeader}
+              <th>${t("table.status")}</th>
+              <th>${t("table.actions")}</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="all-sales-cards" id="allSalesCards"></div>`;
+
+    renderAllSalesCards(sales, isOwner);
+
+    renderAllSalesPagination(page, totalPages, total);
+
+    document.querySelectorAll("#allSalesBody .sale-view-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const saleId = btn.getAttribute("data-sale-id");
+        if (saleId) openSaleDetails(saleId);
+      });
+    });
+  } catch (err) {
+    const msg = err && err.message ? err.message : t("allSales.networkError");
+    body.innerHTML = `<div class="sale-details-error"><i class="bi bi-exclamation-triangle"></i><p>${escapeHtml(msg)}</p><button class="ghost-button" onclick="loadAllSalesPage(${page})">${t("allSales.retry")}</button></div>`;
+    console.error("[AllSales] Load failed:", err);
+  }
+}
+
+function renderAllSalesCards(sales, isOwner) {
+  const container = document.querySelector("#allSalesCards");
+  if (!container) return;
+  container.innerHTML = sales.map(sale => {
+    const saleDate = new Date(sale.sale_date);
+    const dateStr = saleDate.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    const timeStr = saleDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const profitRow = isOwner ? `<div class="all-sales-card-row"><span>${t("table.profit")}</span><span class="all-sales-card-profit">${sale.total_profit === null ? t("role.hidden") : money(sale.total_profit)}</span></div>` : "";
+    return `
+      <div class="all-sales-card">
+        <div class="all-sales-card-header">
+          <span class="all-sales-card-receipt">${escapeHtml(sale.receipt_number)}</span>
+          <span class="status paid">${t(`status.${sale.payment_status}`)}</span>
+        </div>
+        <div class="all-sales-card-row"><span>${t("allSales.date")}</span><span>${dateStr} ${timeStr}</span></div>
+        <div class="all-sales-card-row"><span>${t("allSales.seller")}</span><span>${escapeHtml(sale.seller_name)}</span></div>
+        <div class="all-sales-card-row"><span>${t("table.customerType")}</span><span>${escapeHtml(translatedCustomerType(sale.customer_type))}</span></div>
+        <div class="all-sales-card-row"><span>${t("table.amount")}</span><span class="all-sales-card-amount">${money(sale.total_amount)}</span></div>
+        ${profitRow}
+        <div class="all-sales-card-actions">
+          <button class="ghost-button sale-view-btn" data-sale-id="${sale.sale_id}"><i class="bi bi-eye"></i> ${t("saleDetails.view")}</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderAllSalesPagination(page, totalPages, total) {
+  const container = document.querySelector("#allSalesPagination");
+  if (!container) return;
+
+  if (totalPages <= 1) {
+    container.innerHTML = "";
+    return;
+  }
+
+  let html = `<div class="pagination-controls">`;
+  html += `<button class="ghost-button" ${page <= 1 ? "disabled" : ""} onclick="loadAllSalesPage(${page - 1})"><i class="bi bi-chevron-left"></i> ${t("allSales.prev")}</button>`;
+
+  const maxVisible = 5;
+  let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+  if (endPage - startPage < maxVisible - 1) {
+    startPage = Math.max(1, endPage - maxVisible + 1);
+  }
+
+  if (startPage > 1) {
+    html += `<button class="ghost-button" onclick="loadAllSalesPage(1)">1</button>`;
+    if (startPage > 2) html += `<span class="pagination-page">…</span>`;
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    html += `<button class="ghost-button${i === page ? " pagination-active" : ""}" onclick="loadAllSalesPage(${i})">${i}</button>`;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) html += `<span class="pagination-page">…</span>`;
+    html += `<button class="ghost-button" onclick="loadAllSalesPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  html += `<button class="ghost-button" ${page >= totalPages ? "disabled" : ""} onclick="loadAllSalesPage(${page + 1})">${t("allSales.next")} <i class="bi bi-chevron-right"></i></button>`;
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+// ── Wire View All button ──────────────────────────────────────────────
+document.addEventListener("click", e => {
+  if (e.target.closest("[data-i18n='common.viewAll']") || e.target.closest(".view-all-sales-btn")) {
+    openAllSalesModal();
+  }
+});
+
+document.querySelector("#allSalesClose")?.addEventListener("click", closeAllSalesModal);
+document.querySelector("#allSalesModal")?.addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeAllSalesModal();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    const allSalesModal = document.querySelector("#allSalesModal");
+    if (allSalesModal && !allSalesModal.classList.contains("hidden")) {
+      closeAllSalesModal();
+      return;
+    }
+    const saleDetailsModal = document.querySelector("#saleDetailsModal");
+    if (saleDetailsModal && !saleDetailsModal.classList.contains("hidden")) {
+      closeSaleDetailsModal();
+    }
+  }
+});
+
 function printReceipt() {
   const printArea = document.querySelector("#receiptPrintArea");
   if (!printArea) return;
@@ -1153,38 +1367,41 @@ function printReceipt() {
   printWindow.document.write("*{margin:0;padding:0;box-sizing:border-box}");
   printWindow.document.write("body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#fff;color:#1a1a1a;-webkit-print-color-adjust:exact;print-color-adjust:exact}");
   printWindow.document.write(".receipt-print-area{max-width:400px;margin:0 auto;padding:20px 16px}");
-  printWindow.document.write(".receipt-brand{text-align:center;margin-bottom:12px}");
+  printWindow.document.write(".receipt-brand{text-align:center;margin-bottom:12px;max-width:100%}");
   printWindow.document.write(".receipt-logo{max-width:80px;max-height:80px;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto}");
-  printWindow.document.write(".receipt-store-name{font-size:20px;font-weight:700;letter-spacing:0.5px;margin-bottom:4px}");
-  printWindow.document.write(".receipt-contact{font-size:12px;color:#555;margin:2px 0;display:flex;align-items:center;justify-content:center;gap:4px}");
+  printWindow.document.write(".receipt-store-name{font-size:20px;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;overflow-wrap:break-word;word-break:break-word}");
+  printWindow.document.write(".receipt-contact{font-size:12px;color:#555;margin:2px 0;display:flex;align-items:center;justify-content:center;gap:4px;overflow-wrap:break-word;word-break:break-word;flex-wrap:wrap}");
   printWindow.document.write(".receipt-contact i{font-size:11px}");
   printWindow.document.write(".receipt-divider{border-top:1px dashed #ccc;margin:10px 0}");
   printWindow.document.write(".receipt-divider-thick{border-top:2px solid #1a1a1a;margin:12px 0}");
   printWindow.document.write(".receipt-header-info{margin-bottom:8px}");
   printWindow.document.write(".receipt-meta-row{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}");
   printWindow.document.write(".receipt-meta-label{color:#666}");
-  printWindow.document.write(".receipt-meta-value{font-weight:600;text-align:right}");
-  printWindow.document.write(".receipt-items-table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}");
-  printWindow.document.write(".receipt-items-table thead th{text-align:left;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.3px;padding:6px 4px;border-bottom:1px solid #ddd}");
+  printWindow.document.write(".receipt-meta-value{font-weight:600;text-align:right;overflow-wrap:break-word;word-break:break-word;min-width:0}");
+  printWindow.document.write(".receipt-items-table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0;table-layout:fixed}");
+  printWindow.document.write(".receipt-items-table thead th{text-align:left;font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.3px;padding:6px 4px;border-bottom:1px solid #ddd;overflow-wrap:break-word;word-break:break-word}");
   printWindow.document.write(".receipt-items-table thead th.receipt-col-center{text-align:center}");
   printWindow.document.write(".receipt-items-table thead th.receipt-col-right{text-align:right}");
-  printWindow.document.write(".receipt-items-table tbody td{padding:6px 4px;border-bottom:1px solid #eee;vertical-align:top}");
+  printWindow.document.write(".receipt-items-table tbody td{padding:6px 4px;border-bottom:1px solid #eee;vertical-align:top;overflow-wrap:break-word;word-break:break-word;min-width:0}");
+  printWindow.document.write(".receipt-items-table tbody td:first-child{width:45%}");
+  printWindow.document.write(".receipt-items-table tbody td:nth-child(2){width:7%}");
+  printWindow.document.write(".receipt-items-table tbody td:nth-child(3),.receipt-items-table tbody td:nth-child(4),.receipt-items-table tbody td:nth-child(5){width:16%}");
   printWindow.document.write(".receipt-items-table td.receipt-col-center{text-align:center}");
   printWindow.document.write(".receipt-items-table td.receipt-col-right{text-align:right}");
   printWindow.document.write(".receipt-items-table td.receipt-col-total{font-weight:600}");
   printWindow.document.write(".receipt-item-variant{color:#777;font-size:11px}");
   printWindow.document.write(".receipt-empty{text-align:center;color:#999;padding:16px 4px}");
-  printWindow.document.write(".receipt-summary{margin:8px 0}");
-  printWindow.document.write(".receipt-summary-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#555}");
-  printWindow.document.write(".receipt-summary-row span:last-child{font-weight:500;color:#1a1a1a}");
+  printWindow.document.write(".receipt-summary{margin:8px 0;max-width:100%}");
+  printWindow.document.write(".receipt-summary-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px;color:#555;gap:12px;min-width:0}");
+  printWindow.document.write(".receipt-summary-row span:last-child{font-weight:500;color:#1a1a1a;text-align:right;margin-left:auto;overflow-wrap:break-word;word-break:break-word;min-width:0}");
   printWindow.document.write(".receipt-summary-discount span:last-child{color:#e74c3c}");
   printWindow.document.write(".receipt-summary-total{border-top:1px solid #ddd;margin-top:6px;padding-top:8px}");
   printWindow.document.write(".receipt-summary-total span{font-weight:700;font-size:16px !important;color:#1a1a1a !important}");
   printWindow.document.write(".receipt-payment-info{margin:8px 0;font-size:13px}");
   printWindow.document.write(".receipt-profit-info{margin:8px 0;font-size:13px}");
   printWindow.document.write(".receipt-profit-value{color:#27ae60;font-weight:600}");
-  printWindow.document.write(".receipt-footer-area{text-align:center;margin-top:12px}");
-  printWindow.document.write(".receipt-footer-message{font-size:12px;color:#666;margin-bottom:6px;font-style:italic}");
+  printWindow.document.write(".receipt-footer-area{text-align:center;margin-top:12px;max-width:100%}");
+  printWindow.document.write(".receipt-footer-message{font-size:12px;color:#666;margin-bottom:6px;font-style:italic;overflow-wrap:break-word;word-break:break-word}");
   printWindow.document.write(".receipt-thankyou{font-size:14px;font-weight:600;margin-bottom:4px}");
   printWindow.document.write(".receipt-powered{font-size:11px;color:#999}");
   printWindow.document.write("@media print{body{margin:0;padding:0}.receipt-print-area{max-width:100%;padding:10px 8px}}");
@@ -1787,6 +2004,8 @@ function parseUserAgent(ua) {
 }
 
 function bindAuditEvents() {
+  if (bindAuditEventsDone) return;
+  bindAuditEventsDone = true;
   const applyBtn = document.querySelector("#auditApplyFilters");
   if (applyBtn) applyBtn.addEventListener("click", () => { auditCurrentPage = 1; loadAuditLog(); });
 
@@ -1876,6 +2095,20 @@ function closeAuditDetail() {
 // ─── Backup Management (OWNER only) ────────────────────────────────────────
 let backupCache = new Map();
 let backupBusy = false;
+let systemResetBusy = false;
+
+// One-shot bind guards. These handlers attach to static DOM nodes and must be
+// bound on EVERY entry path (first load while authenticated, or login after a
+// logged-out page load), but never more than once per page lifecycle.
+let bindAuditEventsDone = false;
+let bindBackupEventsDone = false;
+let bindSystemResetEventsDone = false;
+
+function ensureOwnerBindings() {
+  bindAuditEvents();
+  bindBackupEvents();
+  bindSystemResetEvents();
+}
 
 async function loadBackupDashboard() {
   if (!isOwner()) return;
@@ -2250,12 +2483,161 @@ async function confirmRestore() {
   } finally {
     backupBusy = false;
     btn.classList.remove("btn-loading");
+    if (!backupBusy) btn.disabled = false;
   }
 }
 
-function bindBackupEvents() {
-  document.querySelector("#backupRefreshBtn")?.addEventListener("click", loadBackupDashboard);
+function openSystemResetModal() {
+  const modal = document.querySelector("#systemResetModal");
+  if (!modal || !isOwner()) return;
 
+  document.querySelector("#systemResetConfirmCheck1").checked = false;
+  document.querySelector("#systemResetContinueBtn").disabled = true;
+  document.querySelector("#systemResetConfirmCheck1").checked = false;
+  document.querySelector("#systemResetStep1").classList.remove("hidden");
+  document.querySelector("#systemResetStep1Body").classList.remove("hidden");
+  document.querySelector("#systemResetStep2").classList.add("hidden");
+  document.querySelector("#systemResetStep2Actions").classList.add("hidden");
+  document.querySelector("#systemResetPhrase").value = "";
+  document.querySelector("#systemResetExecuteBtn").disabled = true;
+  const msg = document.querySelector("#systemResetMessage");
+  if (msg) msg.textContent = "";
+
+  modal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeSystemResetModal() {
+  const modal = document.querySelector("#systemResetModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    document.body.classList.remove("modal-open");
+  }
+  systemResetBusy = false;
+  const executeBtn = document.querySelector("#systemResetExecuteBtn");
+  if (executeBtn) {
+    executeBtn.classList.remove("btn-loading");
+    executeBtn.disabled = false;
+  }
+}
+
+function showSystemResetStep2() {
+  const modal = document.querySelector("#systemResetModal");
+  if (!modal) return;
+
+  // Build the summary of what will be cleared.
+  const details = document.querySelector("#systemResetDetails");
+  if (details) {
+    details.innerHTML = `
+      <div class="restore-detail-row"><span>${t("systemReset.clearsProducts")}</span><strong>${t("systemReset.yes")}</strong></div>
+      <div class="restore-detail-row"><span>${t("systemReset.clearsSales")}</span><strong>${t("systemReset.yes")}</strong></div>
+      <div class="restore-detail-row"><span>${t("systemReset.clearsImages")}</span><strong>${t("systemReset.yes")}</strong></div>
+      <div class="restore-detail-row"><span>${t("systemReset.preservesUsers")}</span><strong>${t("systemReset.kept")}</strong></div>
+      <div class="restore-detail-row"><span>${t("systemReset.safetyBackup")}</span><strong>${t("systemReset.yes")}</strong></div>
+    `;
+  }
+
+  document.querySelector("#systemResetStep1").classList.add("hidden");
+  document.querySelector("#systemResetStep1Body").classList.add("hidden");
+  document.querySelector("#systemResetStep2").classList.remove("hidden");
+  document.querySelector("#systemResetStep2Actions").classList.remove("hidden");
+  document.querySelector("#systemResetPhrase").value = "";
+  document.querySelector("#systemResetExecuteBtn").disabled = true;
+  const msg = document.querySelector("#systemResetMessage");
+  if (msg) msg.textContent = "";
+  const phrase = document.querySelector("#systemResetPhrase");
+  if (phrase) phrase.focus();
+}
+
+async function executeSystemReset() {
+  const executeBtn = document.querySelector("#systemResetExecuteBtn");
+  if (!isOwner() || !executeBtn || executeBtn.disabled || systemResetBusy) return;
+
+  const phrase = (document.querySelector("#systemResetPhrase").value || "").trim().toUpperCase();
+  if (phrase !== "RESET SYSTEM") {
+    const msg = document.querySelector("#systemResetMessage");
+    if (msg) msg.textContent = t("systemReset.phraseMismatch");
+    return;
+  }
+
+  systemResetBusy = true;
+  executeBtn.disabled = true;
+  executeBtn.classList.add("btn-loading");
+  const msg = document.querySelector("#systemResetMessage");
+  if (msg) msg.textContent = t("systemReset.resetting");
+
+  try {
+    const payload = await apiRequest("api/system_reset.php", {
+      method: "POST",
+      body: JSON.stringify({ confirmation: phrase }),
+    });
+
+    if (payload.success) {
+      if (msg) msg.textContent = t("systemReset.success");
+      showToast(t("systemReset.success"), "success");
+      const removed = payload.removed || {};
+      const total = Object.values(removed).reduce((a, b) => a + Number(b) || 0, 0);
+      if (msg && total > 0) {
+        msg.textContent = `${t("systemReset.success")} (${total} ${t("systemReset.records")})`;
+      }
+      setTimeout(() => {
+        closeSystemResetModal();
+        const cardMsg = document.querySelector("#systemResetCardMessage");
+        if (cardMsg) cardMsg.textContent = t("systemReset.success");
+        refreshAppData();
+      }, 1500);
+    } else {
+      if (msg) msg.textContent = payload.message || t("systemReset.failed");
+      showToast(payload.message || t("systemReset.failed"), "error");
+      systemResetBusy = false;
+      executeBtn.classList.remove("btn-loading");
+      executeBtn.disabled = false;
+    }
+  } catch (e) {
+    if (msg) msg.textContent = e.message;
+    showToast(e.message || t("systemReset.failed"), "error");
+    systemResetBusy = false;
+    executeBtn.classList.remove("btn-loading");
+    executeBtn.disabled = false;
+  }
+}
+
+function bindSystemResetEvents() {
+  if (bindSystemResetEventsDone) return;
+  bindSystemResetEventsDone = true;
+  document.querySelector("#openSystemResetModal")?.addEventListener("click", openSystemResetModal);
+  document.querySelector("#systemResetClose")?.addEventListener("click", closeSystemResetModal);
+  document.querySelector("#systemResetCancel")?.addEventListener("click", closeSystemResetModal);
+  document.querySelector("#systemResetBack")?.addEventListener("click", () => {
+    document.querySelector("#systemResetStep2").classList.add("hidden");
+    document.querySelector("#systemResetStep2Actions").classList.add("hidden");
+    document.querySelector("#systemResetStep1").classList.remove("hidden");
+    document.querySelector("#systemResetStep1Body").classList.remove("hidden");
+    const exec = document.querySelector("#systemResetExecuteBtn");
+    if (exec) { exec.disabled = true; exec.classList.remove("btn-loading"); }
+    const msg = document.querySelector("#systemResetMessage");
+    if (msg) msg.textContent = "";
+  });
+
+  document.querySelector("#systemResetConfirmCheck1")?.addEventListener("change", (e) => {
+    const btn = document.querySelector("#systemResetContinueBtn");
+    if (btn) btn.disabled = !e.target.checked;
+  });
+
+  document.querySelector("#systemResetContinueBtn")?.addEventListener("click", showSystemResetStep2);
+
+  document.querySelector("#systemResetPhrase")?.addEventListener("input", (e) => {
+    const btn = document.querySelector("#systemResetExecuteBtn");
+    if (btn) btn.disabled = (e.target.value || "").trim().toUpperCase() !== "RESET SYSTEM";
+  });
+
+  document.querySelector("#systemResetExecuteBtn")?.addEventListener("click", executeSystemReset);
+}
+
+function bindBackupEvents() {
+  if (bindBackupEventsDone) return;
+  bindBackupEventsDone = true;
+  document.querySelector("#backupRefreshBtn")?.addEventListener("click", loadBackupDashboard);
   document.querySelector("#createDbBackupBtn")?.addEventListener("click", () => createBackup("database"));
   document.querySelector("#createFilesBackupBtn")?.addEventListener("click", () => createBackup("files"));
   document.querySelector("#createFullBackupBtn")?.addEventListener("click", () => createBackup("full"));
@@ -2410,9 +2792,9 @@ document.querySelector("#loginForm")?.addEventListener("submit", async event => 
     currentUser = payload.user;
     document.querySelector("#loginForm").reset();
     showApp();
+    ensureOwnerBindings();
     showToast(t("login.welcome") + ", " + currentUser.name + "!");
-    await refreshAppData();
-    startDashboardAutoRefresh();
+    refreshAppData().then(() => startDashboardAutoRefresh());
   } catch (error) {
     showToast(error.message, "error");
   } finally {
@@ -2693,6 +3075,8 @@ document.querySelectorAll(".nav-item").forEach(button => {
       else if (page === "backup" && isOwner()) await loadBackupDashboard();
       else if (page === "settings" && isOwner()) await loadSettings();
     } catch (e) {
+      console.error("Failed to load page: " + page, e);
+      showToast(t("errors.pageLoad") || "Failed to load this page. Please try again.", "error");
     }
   });
 });
@@ -3116,15 +3500,15 @@ document.querySelector("#cartList")?.addEventListener("click", event => {
     if (input === null) return;
     const fp = Number(input);
     if (isNaN(fp) || fp <= 0) {
-      showToast("Invalid price.", "error");
+      showToast(t("sales.invalidPrice") || "Invalid price.", "error");
       return;
     }
     if (fp < product.min_price) {
-      showToast("The selling price is below the minimum allowed price for this product.", "error");
+      showToast(t("sales.priceBelowMinimum") || "The selling price is below the minimum allowed price for this product.", "error");
       return;
     }
     if (fp > product.selling) {
-      showToast("Final price cannot exceed the selling price.", "error");
+      showToast(t("sales.priceExceedsSelling") || "Final price cannot exceed the selling price.", "error");
       return;
     }
     if (fp === product.selling) {
@@ -3279,6 +3663,8 @@ async function savePromotion() {
     all_products: allProducts,
     product_ids: productIds
   };
+  const btn = document.querySelector("#promotionSaveBtn");
+  if (btn) { btn.disabled = true; btn.classList.add("btn-loading"); }
   try {
     if (editingPromotionId) {
       await apiRequest("api/promotions.php", { method: "PUT", body: JSON.stringify({ id: editingPromotionId, ...body }) });
@@ -3292,6 +3678,8 @@ async function savePromotion() {
     await loadPromotions();
   } catch (e) {
     showToast(e.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove("btn-loading"); }
   }
 }
 
@@ -3502,6 +3890,8 @@ document.querySelector("#expensesBody")?.addEventListener("click", async event =
 document.querySelector("#userForm")?.addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.currentTarget;
+  const btn = form.querySelector("button[type='submit']");
+  if (btn) { btn.disabled = true; btn.classList.add("btn-loading"); }
   try {
     await apiRequest("api/users.php", {
       method: "POST",
@@ -3518,6 +3908,8 @@ document.querySelector("#userForm")?.addEventListener("submit", async event => {
     await loadUsers();
   } catch (error) {
     showToast(error.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove("btn-loading"); }
   }
 });
 
@@ -3579,6 +3971,8 @@ document.querySelector("#darkModeToggle")?.addEventListener("change", event => {
 });
 
 document.querySelector("#saveSettingsButton")?.addEventListener("click", async () => {
+  const btn = document.querySelector("#saveSettingsButton");
+  if (btn) { btn.disabled = true; btn.classList.add("btn-loading"); }
   try {
     await saveSettings();
     showToast(t("settings.saved"));
@@ -3586,6 +3980,8 @@ document.querySelector("#saveSettingsButton")?.addEventListener("click", async (
     const msg = document.querySelector("#settingsMessage");
     if (msg) msg.textContent = error.message;
     showToast(error.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove("btn-loading"); }
   }
 });
 
@@ -3609,6 +4005,8 @@ document.querySelector("#saveMaintenanceButton")?.addEventListener("click", asyn
   const toggle = document.querySelector("#maintenanceModeToggle");
   const msgInput = document.querySelector("#maintenanceMessageInput");
   if (!toggle) return;
+  const btn = document.querySelector("#saveMaintenanceButton");
+  if (btn) { btn.disabled = true; btn.classList.add("btn-loading"); }
   try {
     const payload = await apiRequest("api/maintenance.php", {
       method: "POST",
@@ -3620,6 +4018,8 @@ document.querySelector("#saveMaintenanceButton")?.addEventListener("click", asyn
     showToast(t("settings.maintenanceSaved"));
   } catch (error) {
     showToast(error.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove("btn-loading"); }
   }
 });
 
@@ -4092,6 +4492,10 @@ function forceLogout(reason) {
   clearInterval(countdownInterval);
   clearTimeout(idleTimer);
   clearTimeout(warningTimer);
+  if (dashboardRefreshTimer) {
+    clearInterval(dashboardRefreshTimer);
+    dashboardRefreshTimer = null;
+  }
   idleWarningShowing = false;
 
   document.querySelector("#idleWarningModal")?.classList.add("hidden");
@@ -4159,6 +4563,10 @@ function stopIdleTimer() {
   clearTimeout(idleTimer);
   clearTimeout(warningTimer);
   clearInterval(countdownInterval);
+  if (dashboardRefreshTimer) {
+    clearInterval(dashboardRefreshTimer);
+    dashboardRefreshTimer = null;
+  }
   idleWarningShowing = false;
   document.querySelector("#idleWarningModal")?.classList.add("hidden");
 }
@@ -4314,8 +4722,17 @@ function renderChartSafe(container, renderFn, opts = {}) {
   if (window.MpeliCharts) window.MpeliCharts.showChartLoading(container, opts.loading || "Loading…");
   try {
     const result = renderFn();
-    if (result === null && window.MpeliCharts) {
-      window.MpeliCharts.showChartEmpty(container, opts.empty || "No data available for the selected period.");
+    if (result === null) {
+      // A null result is only a REAL empty state when the amCharts layer is
+      // actually ready. If the chart library is still loading, the renderer
+      // deferred itself via MpeliCharts.onReady(); keep the Loading state so
+      // the user is never told "no data" while the chart is still pending.
+      if (window.MpeliCharts && !window.MpeliCharts.ready) {
+        return null;
+      }
+      if (window.MpeliCharts) {
+        window.MpeliCharts.showChartEmpty(container, opts.empty || "No data available for the selected period.");
+      }
     }
     return result;
   } catch (e) {
@@ -4339,14 +4756,24 @@ async function biRequestSafe(container, url, opts = {}) {
 async function loadBIView() {
   try {
     if (biCurrentView === "overview") {
-      await loadBIOverview();
-      await loadBISalesTrend();
-      await loadBIProfitTrend();
-      if (isOwner()) await loadBIExpenses();
-      await loadBIDiscounts();
+      await Promise.allSettled([
+        loadBIOverview(),
+        loadBISalesTrend(),
+        loadBIProfitTrend(),
+        isOwner() ? loadBIExpenses() : Promise.resolve(),
+        loadBIDiscounts(),
+      ]);
     } else {
-      await loadBISellers();
-      await loadBIProducts();
+      await Promise.allSettled([
+        loadBISellers(),
+        loadBIProducts(),
+      ]);
+      // A period / view / theme change must also refresh an ACTIVE trend
+      // chart; otherwise it would keep showing the previous period's data.
+      // The loaders above restore the dropdown selection and reset the id
+      // when the selected entity is gone, so the guards below are reliable.
+      if (biCurrentSellerId) await loadBISellerTrend(biCurrentSellerId);
+      if (biCurrentProductId) await loadBIProductTrend(biCurrentProductId);
     }
   } catch (e) {
     showToast(e.message, "error");
@@ -4356,7 +4783,8 @@ async function loadBIView() {
 // ── Overview ───────────────────────────────────────────────────────────────
 
 async function loadBIOverview() {
-  const payload = await apiRequest(biUrl("dashboard"));
+  const payload = await biRequestSafe(null, biUrl("dashboard"));
+  if (!payload) return;
   const kpis = payload.kpis;
   const comp = payload.comparison?.comparison || {};
 
@@ -4464,13 +4892,41 @@ async function loadBISellers() {
   else if (biSellerSort === "items") sellers.sort((a, b) => Number(b.items_sold) - Number(a.items_sold));
   else sellers.sort((a, b) => Number(b.revenue) - Number(a.revenue));
 
-  // Populate select
+  // Populate select: every active SELLER plus anyone who sold in the period
+  // (the owner may record sales themselves). Including entities without sales
+  // lets users pick one and see the proper "No data available" empty state.
+  let usersPayload = null;
+  try {
+    usersPayload = await apiRequest("api/users.php");
+  } catch (e) {
+    // Not fatal: fall back to sold-in-period sellers only.
+  }
   const select = document.querySelector("#biSellerSelect");
   if (select) {
     const currentVal = select.value;
+    const byId = new Map();
+    sellers.forEach(s => { if (s.seller_id != null) byId.set(String(s.seller_id), s.seller_name); });
+    (usersPayload && usersPayload.users || []).forEach(u => {
+      if (u.role === "SELLER" && u.status !== "inactive" && !byId.has(String(u.id))) {
+        byId.set(String(u.id), u.name);
+      }
+    });
     select.innerHTML = `<option value="">${t("analytics.selectSeller")}</option>` +
-      sellers.map(s => `<option value="${s.seller_id}">${escapeHtml(s.seller_name)}</option>`).join("");
-    if (currentVal) select.value = currentVal;
+      Array.from(byId.entries())
+        .map(([id, name]) => `<option value="${id}">${escapeHtml(name)}</option>`)
+        .join("");
+    if (currentVal && byId.has(String(currentVal))) {
+      select.value = currentVal;
+    } else if (currentVal) {
+      // The selected seller no longer exists / left the listing: reset the
+      // dropdown and the trend chart instead of leaving stale data under the
+      // wrong selection.
+      select.value = "";
+      biCurrentSellerId = null;
+      const trendChart = document.querySelector("#biSellerTrendChart");
+      if (window.MpeliCharts) window.MpeliCharts.disposeRoot(trendChart);
+      if (trendChart) trendChart.innerHTML = `<div class="bi-empty-state"><i class="bi bi-person-line-dotted"></i><p>${t("analytics.selectSellerHint")}</p></div>`;
+    }
   }
 
   const tbody = document.querySelector("#biSellerBody");
@@ -4520,10 +4976,16 @@ async function loadBISellers() {
   }).join("");
 }
 
+// Guards the seller pattern: only the LATEST selection/period request may
+// write to the trend container. A slower, superseded response is discarded.
+let biSellerTrendReq = 0;
+
 async function loadBISellerTrend(sellerId) {
+  const requestId = ++biSellerTrendReq;
   const container = document.querySelector("#biSellerTrendChart");
   const payload = await biRequestSafe(container, biUrl("seller_trend", { seller_id: sellerId }));
   if (!payload) return;
+  if (requestId !== biSellerTrendReq) return; // superseded by a newer selection
   const trend = payload.trend || [];
 
   if (!trend.length) {
@@ -4582,14 +5044,35 @@ async function loadBIProducts() {
     }
   }
 
-  // Populate product select
-  const allProductsPayload = await apiRequest(biUrl("product_performance"));
+  // Populate product select from ALL active products (not just products sold
+  // in the current period) so a product without records can be selected and
+  // correctly show "No data available" instead of being unselectable.
+  let productsListPayload = null;
+  try {
+    productsListPayload = await apiRequest("api/products.php");
+  } catch (e) {
+    // Not fatal: fall back to an empty dropdown.
+  }
+  const productOptions = (productsListPayload && productsListPayload.products || [])
+    .filter(p => p.status !== "inactive")
+    .map(p => ({ id: p.id, name: p.name || p.product_name || "" }));
   const select = document.querySelector("#biProductSelect");
   if (select) {
     const currentVal = select.value;
     select.innerHTML = `<option value="">${t("analytics.selectProduct")}</option>` +
-      (allProductsPayload.products || []).map(p => `<option value="${p.product_id}">${escapeHtml(p.product_name)}</option>`).join("");
-    if (currentVal) select.value = currentVal;
+      productOptions.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+    if (currentVal && productOptions.some(p => String(p.id) === String(currentVal))) {
+      select.value = currentVal;
+    } else if (currentVal) {
+      // The selected product no longer exists / left the listing: reset the
+      // dropdown and the trend chart instead of leaving stale data under the
+      // wrong selection.
+      select.value = "";
+      biCurrentProductId = null;
+      const trendChart = document.querySelector("#biProductTrendChart");
+      if (window.MpeliCharts) window.MpeliCharts.disposeRoot(trendChart);
+      if (trendChart) trendChart.innerHTML = `<div class="bi-empty-state"><i class="bi bi-box-seam"></i><p>${t("analytics.selectProductHint")}</p></div>`;
+    }
   }
 
   // Render product ranking bar chart.
@@ -4634,10 +5117,16 @@ function renderProductCategories(categories) {
   container.innerHTML = cards.join("") || `<div class="bi-kpi-card"><span class="bi-kpi-label">${t("analytics.noData")}</span></div>`;
 }
 
+// Guards the product pattern: only the LATEST selection/period request may
+// write to the trend container. A slower, superseded response is discarded.
+let biProductTrendReq = 0;
+
 async function loadBIProductTrend(productId) {
+  const requestId = ++biProductTrendReq;
   const container = document.querySelector("#biProductTrendChart");
   const payload = await biRequestSafe(container, biUrl("product_trend", { product_id: productId }));
   if (!payload) return;
+  if (requestId !== biProductTrendReq) return; // superseded by a newer selection
   const trend = payload.trend || [];
 
   if (!trend.length) {
@@ -4807,6 +5296,7 @@ async function init() {
       showApp();
       bindAuditEvents();
       bindBackupEvents();
+      bindSystemResetEvents();
       await refreshAppData();
       const lastPage = getLastPage();
       if (lastPage && lastPage !== "dashboard") {
@@ -4835,3 +5325,13 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+// Bind owner-only feature handlers (Audit, Backup, System Reset) unconditionally.
+// They used to be attached only inside init()'s authenticated branch. When the
+// app was loaded while logged out and the user then signed in through the login
+// form, those bindings never ran — the System Reset button (and Backup/Audit
+// controls) silently did nothing on click. These calls are one-shot guarded, so
+// attaching here cannot create duplicate listeners with init()/login paths.
+bindAuditEvents();
+bindBackupEvents();
+bindSystemResetEvents();

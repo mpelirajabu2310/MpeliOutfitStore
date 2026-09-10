@@ -95,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     $category = trim((string)($data['category'] ?? ''));
     $expenseName = trim((string)($data['expense_name'] ?? ''));
     $description = trim((string)($data['description'] ?? ''));
-    $amount = (float)($data['amount'] ?? 0);
+    $amount = isset($data['amount']) ? (float)$data['amount'] : null;
     $expenseDate = (string)($data['expense_date'] ?? '');
 
     if ($id <= 0) {
@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if ($category === 'Other' && $expenseName === '') {
         respond(['success' => false, 'message' => 'Expense name is required when category is Other.'], 422);
     }
-    if ($amount <= 0) {
+    if ($amount !== null && $amount <= 0) {
         respond(['success' => false, 'message' => 'Expense amount must be greater than zero.'], 422);
     }
     if ($expenseDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
@@ -138,8 +138,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if ($description !== '') {
         $updateData['description'] = $description;
     }
-    if ($amount > 0) {
+    if ($amount !== null && $amount > 0) {
         $updateData['amount'] = $amount;
+    } else {
+        $updateData['amount'] = (float)$expense['amount'];
     }
     if ($expenseDate !== '') {
         $updateData['expense_date'] = $expenseDate;

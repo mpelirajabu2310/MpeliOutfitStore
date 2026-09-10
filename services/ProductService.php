@@ -53,7 +53,7 @@ class ProductService extends BaseService
             $uStmt->execute(['id' => $existingId, 'buying_price' => $buyingPrice, 'selling_price' => $sellingPrice, 'min_price' => $minPrice]);
 
             $vStmt = $this->db->prepare(
-                'UPDATE product_variants SET stock_quantity = :stock, reorder_level = :reorder_level WHERE product_id = :product_id'
+                'UPDATE product_variants SET stock_quantity = :stock, reorder_level = :reorder_level WHERE id = (SELECT id FROM (SELECT id FROM product_variants WHERE product_id = :product_id ORDER BY id ASC LIMIT 1) AS pv_sub)'
             );
             $vStmt->execute(['product_id' => $existingId, 'stock' => $newStock, 'reorder_level' => $threshold]);
 
@@ -134,6 +134,7 @@ class ProductService extends BaseService
 
         $params = ['threshold' => $threshold];
         if ($search !== null && $search !== '') {
+            $search = addcslashes($search, '%_');
             $sql .= ' AND p.product_name LIKE :search';
             $params['search'] = "%{$search}%";
         }
@@ -182,7 +183,7 @@ class ProductService extends BaseService
         if ($id) {
             return (int)$id;
         }
-        $this->db->exec('INSERT INTO categories (name) VALUES ("General")');
+        $this->db->exec("INSERT INTO categories (name) VALUES ('General')");
         return (int)$this->db->lastInsertId();
     }
 }

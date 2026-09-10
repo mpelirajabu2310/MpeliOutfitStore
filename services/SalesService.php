@@ -49,7 +49,7 @@ class SalesService extends BaseService
                 }
             }
 
-            $receiptNumber = 'MM-' . date('Ymd-His') . '-' . random_int(100, 999);
+            $receiptNumber = 'MM-' . date('Ymd-His') . '-' . substr(str_replace('.', '', (string)microtime(true)), -4) . random_int(100, 999);
             $subtotal = 0.0;
             $totalProfit = 0.0;
             $totalDiscount = 0.0;
@@ -460,6 +460,53 @@ class SalesService extends BaseService
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll();
+    }
+
+    public function getSalesPaginated(int $page = 1, int $perPage = 20, ?int $userId = null): array
+    {
+        $perPage = max(1, min(100, $perPage));
+        $page = max(1, $page);
+
+        $where = 'WHERE s.payment_status = \'paid\'';
+        $params = [];
+        if ($userId !== null) {
+            $where .= ' AND s.sold_by = :user_id';
+            $params['user_id'] = $userId;
+        }
+
+        $countSql = 'SELECT COUNT(*) FROM sales s ' . $where;
+        $countStmt = $this->db->prepare($countSql);
+        $countStmt->execute($params);
+        $total = (int)$countStmt->fetchColumn();
+
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        $page = min($page, $totalPages);
+        $offset = ($page - 1) * $perPage;
+
+        $sql = 'SELECT s.id AS sale_id, s.receipt_number, COALESCE(c.customer_type, \'walk_in\') AS customer_type,
+                       s.total_amount, s.total_profit, s.payment_status, s.sale_date, u.name AS seller_name
+                FROM sales s
+                LEFT JOIN customers c ON c.id = s.customer_id
+                JOIN users u ON u.id = s.sold_by
+                ' . $where . '
+                ORDER BY s.sale_date DESC
+                LIMIT :limit OFFSET :offset';
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $key => $val) {
+            $stmt->bindValue($key, $val);
+        }
+        $stmt->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $sales = $stmt->fetchAll();
+
+        return [
+            'sales'      => $sales,
+            'total'      => $total,
+            'page'       => $page,
+            'per_page'   => $perPage,
+            'total_pages'=> $totalPages,
+        ];
     }
 
     public function getSaleDetails(int $saleId, ?int $userId = null): ?array

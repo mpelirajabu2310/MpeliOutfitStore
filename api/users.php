@@ -140,6 +140,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         if (strlen($password) < 8) {
             respond(['success' => false, 'message' => 'Password must be at least 8 characters.'], 422);
         }
+        if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+            respond(['success' => false, 'message' => 'Password must contain at least one letter and one number.'], 422);
+        }
         $sql .= ', password_hash = :password_hash';
         $params['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
     }

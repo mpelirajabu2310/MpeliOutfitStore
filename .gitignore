@@ -16,6 +16,20 @@ _dev/
 # Database (production only — use database/clothing_shop_management.sql)
 database/*.sql
 
+# Backups (keep deployment guard files, ignore generated backup artifacts)
+backups/mpelioutfitstore_*
+backups/.backup_state.json
+backups/.backup.lock
+
+# Uploaded product images (keep guard files, ignore actual images)
+uploads/products/*
+!uploads/products/index.html
+uploads/*.webp
+uploads/*.jpg
+uploads/*.jpeg
+uploads/*.png
+uploads/*.gif
+
 # OS files
 .DS_Store
 Thumbs.db

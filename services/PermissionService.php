@@ -38,6 +38,7 @@ class PermissionService
             'settings.update',
             'maintenance.manage',
             'backup.manage',
+            'system.reset',
             'migration.run',
             'audit.view',
         ],
@@ -95,7 +96,7 @@ class PermissionService
 
     public static function canViewOwnSales(string $role): bool
     {
-        return self::hasPermission($role, 'sales.view_own');
+        return self::hasPermission($role, 'sales.view_own') || self::hasPermission($role, 'sales.view_all');
     }
 
     public static function canManageProducts(string $role): bool

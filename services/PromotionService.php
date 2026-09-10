@@ -122,6 +122,10 @@ class PromotionService extends BaseService
 
     public function deletePromotion(int $promotionId): void
     {
+        $existing = $this->getPromotion($promotionId);
+        if (!$existing) {
+            throw new RuntimeException('Promotion not found.');
+        }
         $stmt = $this->db->prepare('DELETE FROM promotions WHERE id = :id');
         $stmt->execute(['id' => $promotionId]);
     }
@@ -406,13 +410,15 @@ class PromotionService extends BaseService
         if ($value === '') {
             return null;
         }
-        if (preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $value) !== 1) {
+        if (preg_match('/^(\d{2}):(\d{2})(?::(\d{2}))?$/', $value, $m) !== 1) {
             throw new RuntimeException('Invalid time. Use HH:MM.');
         }
-        $normalized = date('H:i:s', strtotime($value));
-        if ($normalized === false) {
-            throw new RuntimeException('Invalid time.');
+        $h = (int)$m[1];
+        $min = (int)$m[2];
+        $sec = isset($m[3]) && $m[3] !== '' ? (int)$m[3] : 0;
+        if ($h > 23 || $min > 59 || $sec > 59) {
+            throw new RuntimeException('Invalid time. Use HH:MM.');
         }
-        return $normalized;
+        return sprintf('%02d:%02d:%02d', $h, $min, $sec);
     }
 }

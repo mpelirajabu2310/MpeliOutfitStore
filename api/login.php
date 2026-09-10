@@ -81,6 +81,12 @@ audit_log((int)$user['id'], 'login_success', "Role: {$user['role']}", 'success',
 $update = $pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id');
 $update->execute(['id' => $user['id']]);
 
+// Upgrade the password hash if the current algorithm/cost is outdated.
+if (password_needs_rehash((string)$user['password_hash'], PASSWORD_DEFAULT)) {
+    $rehash = $pdo->prepare('UPDATE users SET password_hash = :hash WHERE id = :id');
+    $rehash->execute(['hash' => password_hash($password, PASSWORD_DEFAULT), 'id' => $user['id']]);
+}
+
 unset($user['password_hash']);
 
 respond([

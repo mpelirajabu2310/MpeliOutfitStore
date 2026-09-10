@@ -108,6 +108,8 @@ if ($method === 'DELETE') {
             'entity_id' => $promotionId,
         ]);
         respond(['success' => true, 'message' => 'Promotion deleted successfully.']);
+    } catch (RuntimeException $exception) {
+        respond(['success' => false, 'message' => $exception->getMessage()], 404);
     } catch (Throwable $exception) {
         error_log('[promotions] delete: ' . $exception->getMessage());
         respond(['success' => false, 'message' => 'Failed to delete promotion.'], 500);
