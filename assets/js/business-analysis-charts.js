@@ -153,8 +153,32 @@
   }
 
   // â”€â”€ Sales & Revenue Trend (line: revenue, dashed: sales count) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // The deferred MpeliCharts.onReady() path (see script.js loadBISalesTrend)
+  // can re-invoke a renderer after the tab-switch dispose pass (script.js
+  // #biSalesTrendChart disposal on page change) has already torn down the
+  // container's am5 root or removed the element from the document. Guard both:
+  // an unmounted container and a live-but-empty dataset are never rendered as
+  // a phantom chart, and a disposed root is never resurrected.
+  function containerAlive(container) {
+    return !!container && typeof container.isConnected === "boolean" ? container.isConnected : !!container;
+  }
+
+  // A chart must only render into a container that is CURRENTLY mounted in the
+  // document. The BI tab disposes every analyzed-chart root via
+  // MpeliCharts.disposeRoot() whenever the user switches tabs/periods (see
+  // script.js loadBIView / dispose comments), so a deferred
+  // MpeliCharts.onReady() render must never touch a torn-down container.
+  // Otherwise amCharts 5 paints into a detached element and the Sales/Profit
+  // Trend canvases intermittently render as empty shells.
+  function containerAlive(container) {
+    if (!container) return false;
+    return typeof container.isConnected === "boolean"
+      ? container.isConnected
+      : true;
+  }
+
   function renderSalesTrend(container, trend) {
-    if (!container || !M.am5 || !M.am5xy) return null;
+    if (!container || !M.am5 || !M.am5xy || !containerAlive(container)) return null;
     const rows = buildDateRows(trend, "sale_day");
     if (!rows.length) {
       M.disposeRoot(container);
@@ -162,7 +186,7 @@
       return null;
     }
     const { root } = M.safeRoot(container, ["xy"]);
-    if (!root) return null;
+    if (!root || !containerAlive(container)) return null;
 
     const am5 = M.am5, xy = M.am5xy;
     const p = M.palette();
@@ -234,7 +258,7 @@
 
   // â”€â”€ Profit vs Expenses Trend (revenue, gross profit, net profit, expenses) â”€
   function renderProfitTrend(container, trend) {
-    if (!container || !M.am5 || !M.am5xy) return null;
+    if (!container || !M.am5 || !M.am5xy || !containerAlive(container)) return null;
     const rows = buildDateRows(trend, "date");
     if (!rows.length) {
       M.disposeRoot(container);
