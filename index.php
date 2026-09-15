@@ -418,8 +418,16 @@ $assetVersion = static function (string $path): string {
       </main>
       <main class="page" id="reports">
         <div class="page-heading">
-          <div><p class="eyebrow" data-i18n="reports.eyebrow">Performance Intelligence</p><h2 data-i18n="reports.title">Reports and Analytics</h2></div>
+          <div><p class="eyebrow" data-i18n="reports.eyebrow">Detailed Records &amp; Exports</p><h2 data-i18n="reports.title">Reports</h2></div>
           <button class="gold-button" id="generateReportReportsButton" data-i18n="reports.generateReport"><i class="bi bi-file-earmark-bar-graph"></i> Generate Report</button>
+        </div>
+        <div class="report-filter-bar">
+          <label for="reportStartDate" data-i18n="reports.dateRange">Date Range</label>
+          <input type="date" id="reportStartDate" />
+          <span data-i18n="reports.toDate">to</span>
+          <input type="date" id="reportEndDate" />
+          <button class="ghost-button" id="reportApplyFilter" data-i18n="reports.apply">Apply</button>
+          <button class="ghost-button" id="reportClearFilter" data-i18n="reports.clear">Clear</button>
         </div>
         <section class="report-grid">
           <article class="panel"><h3 data-i18n="reports.dailySales">Daily Sales</h3><strong id="reportDailySales">TSH 0</strong><p id="reportDailyNote" class="report-note" data-i18n="dashboard.noChartData">No sales data available yet.</p></article>
@@ -454,20 +462,65 @@ $assetVersion = static function (string $path): string {
               <div class="fin-row fin-highlight"><span data-i18n="stats.yearlyNetProfit">Net Profit</span><strong id="finYearlyNetProfit">TSH 0</strong></div>
             </div>
           </article>
-          <article class="panel financial-card expense-card"><h3 data-i18n="reports.expenseBreakdown">Expense Breakdown</h3>
-            <div class="financial-lines" id="expenseBreakdownContainer">
-              <span class="report-note" data-i18n="dashboard.noChartData">No expense data available yet.</span>
+        </section>
+        <section class="report-details">
+          <article class="panel">
+            <h3 data-i18n="reports.salesTransactions">Recent Sales Transactions</h3>
+            <div class="table-wrap">
+              <table class="report-table" id="reportSalesTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="table.date">Date</th>
+                    <th data-i18n="table.receipt">Receipt</th>
+                    <th data-i18n="table.customerType">Customer</th>
+                    <th class="align-right" data-i18n="analytics.itemsSold">Items</th>
+                    <th class="align-right" data-i18n="analytics.revenue">Revenue</th>
+                    <th class="align-right owner-only" data-i18n="table.profit">Profit</th>
+                    <th data-i18n="users.name">Seller</th>
+                  </tr>
+                </thead>
+                <tbody id="reportSalesBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="panel">
+            <h3 data-i18n="reports.expenseRecords">Expense Records</h3>
+            <div class="table-wrap">
+              <table class="report-table" id="reportExpensesTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="table.date">Date</th>
+                    <th data-i18n="table.category">Category</th>
+                    <th data-i18n="reports.description">Description</th>
+                    <th class="align-right" data-i18n="table.amount">Amount</th>
+                    <th data-i18n="reports.recordedBy">Recorded By</th>
+                  </tr>
+                </thead>
+                <tbody id="reportExpensesBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="panel owner-only">
+            <h3 data-i18n="reports.inventorySnapshot">Inventory Snapshot</h3>
+            <div class="table-wrap">
+              <table class="report-table" id="reportInventoryTable">
+                <thead>
+                  <tr>
+                    <th data-i18n="table.product">Product</th>
+                    <th data-i18n="table.category">Category</th>
+                    <th class="align-right" data-i18n="analytics.stock">Stock</th>
+                    <th class="align-right" data-i18n="reports.reorder">Reorder</th>
+                    <th class="align-right" data-i18n="reports.buying">Buying</th>
+                    <th class="align-right" data-i18n="reports.selling">Selling</th>
+                    <th class="align-right" data-i18n="reports.profitPerUnit">Profit / Unit</th>
+                    <th data-i18n="table.status">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="reportInventoryBody"></tbody>
+              </table>
             </div>
           </article>
         </section>
-        <article class="panel">
-          <div class="panel-title"><h3 data-i18n="reports.revenueCharts">Revenue Charts</h3><span data-i18n="reports.monthlyGraph">Monthly graph</span></div>
-          <div class="line-chart" id="reportChart"><p class="empty-state" data-i18n="dashboard.noChartData">No sales data available yet.</p></div>
-        </article>
-        <article class="panel">
-          <h3 data-i18n="reports.bestSelling">Best Selling Products</h3>
-          <div class="best-sellers" id="bestSellers"><span data-i18n="dashboard.noChartData">No sales data available yet.</span></div>
-        </article>
       </main>
       <main class="page owner-only" id="analytics">
         <div class="page-heading">
@@ -519,21 +572,6 @@ $assetVersion = static function (string $path): string {
 
           <div class="bi-insights" id="biInsights"></div>
 
-          <!-- Daily Summary (Owner) -->
-          <div class="bi-subsection owner-only" id="biDailySummarySection">
-            <h3 class="bi-subsection-title" data-i18n="analytics.dailySummary">Today's Summary</h3>
-            <div class="bi-expense-flow">
-              <div class="bi-flow-card flow-revenue"><div class="flow-label" data-i18n="analytics.revenue">Revenue</div><div class="flow-value" id="biDailyRevenue">TSH 0</div></div>
-              <div class="bi-flow-card flow-gross"><div class="flow-label" data-i18n="analytics.grossProfit">Gross Profit</div><div class="flow-value" id="biDailyGrossProfit">TSH 0</div></div>
-              <div class="bi-flow-card flow-expense"><div class="flow-label" data-i18n="analytics.expenses">Expenses</div><div class="flow-value" id="biDailyExpenses">TSH 0</div></div>
-              <div class="bi-flow-card flow-net"><div class="flow-label" data-i18n="analytics.netProfit">Net Profit</div><div class="flow-value" id="biDailyNetProfit">TSH 0</div></div>
-            </div>
-            <div class="bi-kpi-grid" style="grid-template-columns: 1fr 1fr;">
-              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.topProduct">Top Product</span><span class="bi-kpi-value" id="biDailyTopProduct" style="font-size:15px">—</span></div>
-              <div class="bi-kpi-card"><span class="bi-kpi-label" data-i18n="analytics.topSeller">Top Seller</span><span class="bi-kpi-value" id="biDailyTopSeller" style="font-size:15px">—</span></div>
-            </div>
-          </div>
-
           <!-- Sales & Revenue Trend + Profit & Expense Trend -->
           <div class="bi-trend-grid">
             <div class="bi-chart-panel">
@@ -559,12 +597,6 @@ $assetVersion = static function (string $path): string {
 
           <!-- Expense Impact (Owner) -->
           <div class="bi-subsection owner-only" id="biExpenseSection" style="margin-top:18px">
-            <div class="bi-expense-flow" id="biExpenseFlow">
-              <div class="bi-flow-card flow-revenue"><div class="flow-label" data-i18n="analytics.revenue">Revenue</div><div class="flow-value" id="biExpRevenue">TSH 0</div></div>
-              <div class="bi-flow-card flow-gross"><div class="flow-label" data-i18n="analytics.grossProfit">Gross Profit</div><div class="flow-value" id="biExpGrossProfit">TSH 0</div></div>
-              <div class="bi-flow-card flow-expense"><div class="flow-label" data-i18n="analytics.expenses">Expenses</div><div class="flow-value" id="biExpExpenses">TSH 0</div></div>
-              <div class="bi-flow-card flow-net"><div class="flow-label" data-i18n="analytics.netProfit">Net Profit</div><div class="flow-value" id="biExpNetProfit">TSH 0</div></div>
-            </div>
             <div class="panel" style="padding:16px">
               <h3 data-i18n="analytics.expenseBreakdown">Expense Breakdown</h3>
               <div class="bi-table-wrap">

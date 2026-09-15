@@ -98,6 +98,72 @@ class ReportService extends BaseService
     }
 
     /**
+     * Transaction-level detail records for the on-screen Reports page.
+     *
+     * These are the "what happened" records behind the summary figures, reusing
+     * the same services as the generated PDF/XLS exports so values always match.
+     * Only the owner receives profit-per-row and the inventory snapshot; sellers
+     * are scoped to their own records and never see cost/profit data.
+     */
+    public function getReportDetails(
+        ?int $userId = null,
+        bool $isOwner = false,
+        ?string $startDate = null,
+        ?string $endDate = null
+    ): array {
+        $sellerFilter = $userId !== null && !$isOwner ? $userId : null;
+
+        $sales = [];
+        foreach ($this->sales->getSalesDetail($sellerFilter, $startDate, $endDate, 50) as $s) {
+            $row = [
+                'date' => (string)substr((string)$s['sale_date'], 0, 10),
+                'receipt' => (string)$s['receipt_number'],
+                'customer' => (string)$s['customer_type'],
+                'items' => (int)$s['items_sold'],
+                'revenue' => (float)$s['total_amount'],
+                'seller' => (string)$s['seller_name'],
+            ];
+            if ($isOwner) {
+                $row['profit'] = (float)$s['total_profit'];
+            }
+            $sales[] = $row;
+        }
+
+        $expenses = [];
+        foreach ($this->expense->getExpenseList($sellerFilter, $startDate, $endDate, 50) as $e) {
+            $expenses[] = [
+                'date' => (string)$e['expense_date'],
+                'category' => (string)$e['category'],
+                'description' => (string)($e['expense_name'] ?? ($e['description'] ?? '')),
+                'amount' => (float)$e['amount'],
+                'recorded_by' => (string)$e['created_by_name'],
+            ];
+        }
+
+        $inventory = [];
+        if ($isOwner) {
+            foreach ($this->inventory->getStockReportData() as $p) {
+                $inventory[] = [
+                    'product' => (string)$p['product_name'],
+                    'category' => (string)$p['category_name'],
+                    'stock' => (int)$p['total_stock'],
+                    'reorder' => (int)$p['reorder_level'],
+                    'buying' => (float)$p['buying_price'],
+                    'selling' => (float)$p['selling_price'],
+                    'profit_per_unit' => (float)$p['profit_per_unit'],
+                    'status' => (string)$p['stock_status'],
+                ];
+            }
+        }
+
+        return [
+            'sales' => $sales,
+            'expenses' => $expenses,
+            'inventory' => $inventory,
+        ];
+    }
+
+    /**
      * Single source of truth for all sales/financial figures. Both the
      * dashboards and the generated reports use this so values always match.
      */

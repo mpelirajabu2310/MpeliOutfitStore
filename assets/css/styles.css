@@ -2226,6 +2226,7 @@ th {
 
 .report-table th { background: var(--surface-alt); font-weight: 700; }
 .report-table td { background: var(--surface); }
+.report-table th.align-right, .report-table td.align-right { text-align: right; }
 
 /* Search icon */
 .search-icon-btn {
@@ -4505,6 +4506,40 @@ body.dark .backup-type-badge.type-full { background: var(--badge-danger-bg); col
   font-size: 13px;
 }
 .bi-custom-range .ghost-button {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+/* Report detail filter bar */
+.report-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+.report-filter-bar label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.report-filter-bar span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.report-filter-bar input[type="date"] {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 13px;
+}
+.report-filter-bar .ghost-button {
   padding: 5px 12px;
   font-size: 12px;
 }

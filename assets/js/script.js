@@ -1419,7 +1419,14 @@ function printReceipt() {
 }
 
 async function loadReports(options = {}) {
-  const payload = await apiRequest("api/reports.php", options);
+  let url = "api/reports.php";
+  const params = new URLSearchParams();
+  if (options.start_date) params.set("start_date", options.start_date);
+  if (options.end_date) params.set("end_date", options.end_date);
+  const qs = params.toString();
+  if (qs) url += "?" + qs;
+
+  const payload = await apiRequest(url, options);
   document.querySelector("#reportDailySales").textContent = money(payload.stats.daily_sales);
   document.querySelector("#reportWeeklySales").textContent = money(payload.stats.weekly_sales);
   document.querySelector("#reportMonthlySales").textContent = money(payload.stats.monthly_sales);
@@ -1452,34 +1459,73 @@ async function loadReports(options = {}) {
     setStat("#finYearlyGrossProfit", payload.stats.yearly_profit);
     setStat("#finYearlyExpenses", payload.stats.yearly_expenses);
     setStat("#finYearlyNetProfit", payload.stats.yearly_net_profit);
-
-    // Expense breakdown
-    const container = document.querySelector("#expenseBreakdownContainer");
-    if (container && payload.expense_categories?.length) {
-      let total = 0;
-      container.innerHTML = payload.expense_categories.map(c => {
-        total += Number(c.total);
-        return `<div class="fin-row"><span>${escapeHtml(t("expenseCategory." + c.category.toLowerCase()) || c.category)}</span><strong>${money(c.total)}</strong></div>`;
-      }).join("") + `<div class="fin-row fin-divider"><span>${t("expenses.thisMonth")}</span><strong>${money(total)}</strong></div>`;
-    }
   }
 
-  renderLineChart(document.querySelector("#reportChart"), payload.monthly_chart, payload.has_sales);
+  renderReportDetails(payload.details || {}, payload.role);
+}
 
-  const bestBox = document.querySelector("#bestSellers");
-  if (!payload.best_sellers?.length) {
-    if (bestBox) bestBox.innerHTML = `<span class="empty-state">${t("dashboard.noChartData")}</span>`;
-    return;
+function renderReportDetails(details, role) {
+  const isOwner = role === "OWNER";
+  const noData = t("reports.noRecords");
+
+  // Recent Sales Transactions
+  const salesBody = document.querySelector("#reportSalesBody");
+  if (salesBody) {
+    const sales = details.sales || [];
+    salesBody.innerHTML = sales.length
+      ? sales.map(s => `
+        <tr>
+          <td>${escapeHtml(s.date)}</td>
+          <td>${escapeHtml(s.receipt)}</td>
+          <td>${translatedCustomerType(s.customer)}</td>
+          <td class="align-right">${s.items}</td>
+          <td class="align-right">${money(s.revenue)}</td>
+          ${isOwner ? `<td class="align-right">${money(s.profit)}</td>` : ""}
+          <td>${escapeHtml(s.seller)}</td>
+        </tr>`).join("")
+      : `<tr><td colspan="${isOwner ? 7 : 6}" class="align-right">${noData}</td></tr>`;
   }
 
-  if (bestBox) {
-    bestBox.innerHTML = payload.best_sellers.map(item => `
-      <div class="best-seller-row">
-        <strong>${escapeHtml(item.product_name)}</strong>
-        <span>${escapeHtml(item.category_name || "")}</span>
-        <small>${t("reports.unitsSold", { count: item.units_sold })} · ${money(item.revenue)}</small>
-      </div>
-    `).join("");
+  // Expense Records
+  const expensesBody = document.querySelector("#reportExpensesBody");
+  if (expensesBody) {
+    const expenses = details.expenses || [];
+    expensesBody.innerHTML = expenses.length
+      ? expenses.map(e => `
+        <tr>
+          <td>${escapeHtml(e.date)}</td>
+          <td>${escapeHtml(t("expenseCategory." + e.category.toLowerCase()) || e.category)}</td>
+          <td>${escapeHtml(e.description)}</td>
+          <td class="align-right">${money(e.amount)}</td>
+          <td>${escapeHtml(e.recorded_by)}</td>
+        </tr>`).join("")
+      : `<tr><td colspan="5" class="align-right">${noData}</td></tr>`;
+  }
+
+  // Inventory Snapshot (owner-only)
+  const inventoryBody = document.querySelector("#reportInventoryBody");
+  if (inventoryBody) {
+    const inventory = details.inventory || [];
+    inventoryBody.innerHTML = inventory.length
+      ? inventory.map(p => {
+          const statusClass = p.status === "out_of_stock" ? "stock-badge danger" : p.status === "low_stock" ? "stock-badge warning" : "";
+          const statusLabel = p.status === "out_of_stock"
+            ? t("inventory.outOfStock")
+            : p.status === "low_stock"
+              ? t("inventory.lowStock")
+              : t("inventory.inStock");
+          return `<tr>
+            <td>${escapeHtml(p.product)}</td>
+            <td>${escapeHtml(p.category)}</td>
+            <td class="align-right">${p.stock}</td>
+            <td class="align-right">${p.reorder}</td>
+            <td class="align-right">${money(p.buying)}</td>
+            <td class="align-right">${money(p.selling)}</td>
+            <td class="align-right">${money(p.profit_per_unit)}</td>
+            <td>${statusClass ? `<span class="${statusClass}">${statusLabel}</span>` : statusLabel}</td>
+          </tr>`;
+        }).join("")
+      : `<tr><td colspan="8" class="align-right">${noData}</td></tr>`;
   }
 }
 
@@ -4184,6 +4230,25 @@ async function generateAndDownloadReport() {
 
 document.querySelector("#generateReportButton")?.addEventListener("click", showReportWizard);
 document.querySelector("#generateReportReportsButton")?.addEventListener("click", showReportWizard);
+
+// Reports detail table date-range filter. The summary cards keep their fixed
+// daily/weekly/monthly periods; only the detailed records obey the range.
+document.querySelector("#reportApplyFilter")?.addEventListener("click", () => {
+  const start = document.querySelector("#reportStartDate")?.value || "";
+  const end = document.querySelector("#reportEndDate")?.value || "";
+  if (start && end && start > end) {
+    showToast(t("reports.invalidRange"), "error");
+    return;
+  }
+  loadReports(start || end ? { start_date: start, end_date: end } : {});
+});
+document.querySelector("#reportClearFilter")?.addEventListener("click", () => {
+  const startInput = document.querySelector("#reportStartDate");
+  const endInput = document.querySelector("#reportEndDate");
+  if (startInput) startInput.value = "";
+  if (endInput) endInput.value = "";
+  loadReports();
+});
 document.querySelector("#wizardClose")?.addEventListener("click", closeReportWizard);
 document.querySelector("#wizardCancel")?.addEventListener("click", closeReportWizard);
 document.querySelector("#wizardPeriod")?.addEventListener("change", () => {
@@ -4806,18 +4871,6 @@ async function loadBIOverview() {
   setComparison("#biSalesCountCompare", comp.sales_count);
   setComparison("#biItemsSoldCompare", comp.items_sold);
 
-  // Daily summary
-  if (payload.daily_summary) {
-    const ds = payload.daily_summary;
-    const dsKpis = ds.kpis;
-    setText("#biDailyRevenue", money(dsKpis.revenue));
-    setText("#biDailyGrossProfit", money(dsKpis.gross_profit));
-    setText("#biDailyExpenses", money(dsKpis.expenses));
-    setText("#biDailyNetProfit", money(dsKpis.net_profit));
-    setText("#biDailyTopProduct", ds.top_product?.product_name || "—");
-    setText("#biDailyTopSeller", ds.top_seller?.seller_name || "—");
-  }
-
   // Insights
   const insightsEl = document.querySelector("#biInsights");
   if (insightsEl && payload.insights) {
@@ -5148,11 +5201,6 @@ async function loadBIProductTrend(productId) {
 async function loadBIExpenses() {
   const payload = await apiRequest(biUrl("expense_impact"));
   const impact = payload.impact || {};
-
-  setText("#biExpRevenue", money(impact.revenue));
-  setText("#biExpGrossProfit", money(impact.gross_profit));
-  setText("#biExpExpenses", money(impact.expenses));
-  setText("#biExpNetProfit", money(impact.net_profit));
 
   const tbody = document.querySelector("#biExpenseBreakdownBody");
   if (!tbody) return;
