@@ -159,9 +159,6 @@
   // container's am5 root or removed the element from the document. Guard both:
   // an unmounted container and a live-but-empty dataset are never rendered as
   // a phantom chart, and a disposed root is never resurrected.
-  function containerAlive(container) {
-    return !!container && typeof container.isConnected === "boolean" ? container.isConnected : !!container;
-  }
 
   // A chart must only render into a container that is CURRENTLY mounted in the
   // document. The BI tab disposes every analyzed-chart root via
