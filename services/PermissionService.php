@@ -44,7 +44,6 @@ class PermissionService
         ],
         'SELLER' => [
             'dashboard.view',
-            'analytics.view',
             'products.view',
             'promotions.view',
             'sales.create',

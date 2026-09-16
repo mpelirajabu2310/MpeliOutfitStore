@@ -29,6 +29,19 @@ if (!$sale) {
     respond(['success' => false, 'message' => 'Sale not found or you do not have permission to view it.'], 404);
 }
 
+// Profit and buying costs are financial data reserved for the OWNER role.
+// Sellers may view their own sales, but never profit figures or unit costs.
+if ($user['role'] !== 'OWNER') {
+    $sale['total_profit'] = null;
+    if (isset($sale['items']) && is_array($sale['items'])) {
+        foreach ($sale['items'] as &$item) {
+            $item['buying_price'] = null;
+            $item['line_profit'] = null;
+        }
+        unset($item);
+    }
+}
+
 $paymentMethod = null;
 $pStmt = $pdo->prepare(
     'SELECT payment_method FROM payments WHERE sale_id = :sale_id ORDER BY id ASC LIMIT 1'

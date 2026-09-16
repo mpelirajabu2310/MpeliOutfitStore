@@ -7,6 +7,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['success' => false, 'message' => 'Method not allowed.'], 405);
 }
 
+// Prevent cross-site logout attacks: requires a valid session CSRF token.
+require_csrf();
+
 // Log before destroying session
 $userId = $_SESSION['user_id'] ?? 0;
 if ($userId) {

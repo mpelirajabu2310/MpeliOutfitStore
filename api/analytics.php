@@ -13,7 +13,7 @@ $isOwner = $user['role'] === 'OWNER';
 require_once __DIR__ . '/../services/AnalyticsService.php';
 require_once __DIR__ . '/../services/PermissionService.php';
 
-PermissionService::requirePermission($user['role'], 'analytics.view');
+PermissionService::requirePermission($user['role'], 'analytics.view_financials');
 
 $analytics = new AnalyticsService();
 $action = $_GET['action'] ?? 'dashboard';
