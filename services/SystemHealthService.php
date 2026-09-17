@@ -267,17 +267,38 @@ class SystemHealthService
 
     // ─── Maintenance Mode (Part 23) ─────────────────────────────────────────
 
-    public function checkMaintenanceMode(): bool
+    /**
+     * Read the maintenance flag file. Returns the decoded settings array ONLY
+     * when the file exists AND contains a valid, non-empty JSON object.
+     *
+     * A missing file means normal mode. An empty, invalid, or corrupt flag
+     * file must NOT force the whole system into maintenance mode: the flag is
+     * ignored and removed (self-healing) instead of being treated as active.
+     */
+    private function readMaintenanceFlag(): ?array
     {
         $flagFile = dirname(__DIR__) . '/logs/.maintenance';
         if (!is_file($flagFile)) {
+            return null;
+        }
+        $raw = @file_get_contents($flagFile);
+        $data = @json_decode((string)$raw, true);
+        if (!is_array($data) || $data === []) {
+            @unlink($flagFile);
+            return null;
+        }
+        return $data;
+    }
+
+    public function checkMaintenanceMode(): bool
+    {
+        $maintenanceData = $this->readMaintenanceFlag();
+        if ($maintenanceData === null) {
             $this->addCheck('maintenance', 'Maintenance Mode', 'ok', 'System is in normal mode.');
             return false;
         }
 
-        $maintenanceData = @json_decode(@file_get_contents($flagFile), true);
         $message = $maintenanceData['message'] ?? 'System is under maintenance.';
-        $allowedRoles = $maintenanceData['allowed_roles'] ?? ['OWNER'];
 
         $this->addCheck('maintenance', 'Maintenance Mode', 'warning', $message);
         return true;
@@ -285,16 +306,15 @@ class SystemHealthService
 
     public function isMaintenanceMode(): bool
     {
-        return is_file(dirname(__DIR__) . '/logs/.maintenance');
+        return $this->readMaintenanceFlag() !== null;
     }
 
     public function getMaintenanceInfo(): array
     {
-        $flagFile = dirname(__DIR__) . '/logs/.maintenance';
-        if (!is_file($flagFile)) {
+        $data = $this->readMaintenanceFlag();
+        if ($data === null) {
             return ['active' => false];
         }
-        $data = @json_decode(@file_get_contents($flagFile), true) ?: [];
         return [
             'active' => true,
             'message' => $data['message'] ?? 'System is under maintenance.',
