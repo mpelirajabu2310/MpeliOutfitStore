@@ -138,16 +138,12 @@ class AnalyticsService extends BaseService
 
     // ── Period Comparisons ──────────────────────────────────────────────────
 
-    public function getComparison(string $period, ?int $userId = null, ?string $start = null, ?string $end = null): array
+    public function getComparison(string $period, ?int $userId = null): array
     {
-        if ($start === null || $end === null) {
-            $range = self::resolveDateRange($period);
-            $start = $range['start'];
-            $end = $range['end'];
-        }
-        $current = $this->getDashboardKPIs($start, $end, $userId);
+        $range = self::resolveDateRange($period);
+        $current = $this->getDashboardKPIs($range['start'], $range['end'], $userId);
 
-        $prevRange = self::getPreviousRange($start, $end);
+        $prevRange = self::getPreviousRange($range['start'], $range['end']);
         $previous = $this->getDashboardKPIs($prevRange['start'], $prevRange['end'], $userId);
 
         return [
@@ -244,7 +240,7 @@ class AnalyticsService extends BaseService
         );
         $stmt->execute([
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ]);
         $sellers = $stmt->fetchAll();
 
@@ -306,7 +302,7 @@ class AnalyticsService extends BaseService
         $dateFilter = '';
         $params = [
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ];
         if ($userId !== null) {
             $dateFilter = ' AND s.sold_by = :user_id';
@@ -384,7 +380,7 @@ class AnalyticsService extends BaseService
         $stmt->execute([
             'product_id' => $productId,
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ]);
         return $stmt->fetchAll();
     }
@@ -432,7 +428,7 @@ class AnalyticsService extends BaseService
         );
         $stmt->execute([
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ]);
         return $stmt->fetchAll();
     }
@@ -535,7 +531,7 @@ class AnalyticsService extends BaseService
         );
         $params = [
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ];
         if ($userId !== null) {
             $stmt = $this->db->prepare(
@@ -585,7 +581,7 @@ class AnalyticsService extends BaseService
         );
         $stmt->execute([
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ]);
         return $stmt->fetchAll();
     }
@@ -594,8 +590,8 @@ class AnalyticsService extends BaseService
 
     public function getDailySummary(?int $userId = null): array
     {
-        $start = tz_today();
-        $end = tz_today();
+        $start = date('Y-m-d');
+        $end = date('Y-m-d');
         $kpis = $this->getDashboardKPIs($start, $end, $userId);
 
         $topProduct = null;
@@ -722,16 +718,11 @@ class AnalyticsService extends BaseService
 
     // ── Growth Analysis ─────────────────────────────────────────────────────
 
-    public function getGrowthAnalysis(string $period, ?int $userId = null, ?string $start = null, ?string $end = null): array
+    public function getGrowthAnalysis(string $period, ?int $userId = null): array
     {
-        if ($start === null || $end === null) {
-            $range = self::resolveDateRange($period);
-            $start = $range['start'];
-            $end = $range['end'];
-        }
-        $range = ['start' => $start, 'end' => $end];
-        $current = $this->getDashboardKPIs($start, $end, $userId);
-        $prevRange = self::getPreviousRange($start, $end);
+        $range = self::resolveDateRange($period);
+        $current = $this->getDashboardKPIs($range['start'], $range['end'], $userId);
+        $prevRange = self::getPreviousRange($range['start'], $range['end']);
         $previous = $this->getDashboardKPIs($prevRange['start'], $prevRange['end'], $userId);
 
         $metrics = ['revenue', 'gross_profit', 'sales_count', 'items_sold'];
@@ -774,7 +765,7 @@ class AnalyticsService extends BaseService
         );
         $params = [
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ];
         if ($userId !== null) {
             $stmt = $this->db->prepare($stmt->queryString . ' AND s.sold_by = :user_id');
@@ -794,7 +785,7 @@ class AnalyticsService extends BaseService
         );
         $stmt->execute([
             'start_date' => $start . ' 00:00:00',
-            'end_date' => tz_day_after($end) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($end . ' +1 day')) . ' 00:00:00',
         ]);
         return (int)$stmt->fetchColumn();
     }

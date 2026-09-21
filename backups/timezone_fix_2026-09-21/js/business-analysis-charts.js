@@ -15,14 +15,18 @@
 
   // â”€â”€ Date parsing helpers (handles "YYYY-MM-DD" and "YYYY-MM") â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function parseDay(value) {
-    const d = M.parseBusinessDate(value);
-    return d !== null && !Number.isNaN(d.getTime()) ? d : null;
+    if (!value) return null;
+    const s = String(value);
+    const parts = s.split("-");
+    if (parts.length >= 3) return new Date(s + "T00:00:00Z");
+    if (parts.length === 2) return new Date(s + "-01T00:00:00Z");
+    const d = new Date(s + "T00:00:00Z");
+    return Number.isNaN(d.getTime()) ? null : d;
   }
 
   function fmtTooltipDate(date) {
     if (!date) return "";
-    const currentYear = Number(String(M.tzToday()).slice(0, 4));
-    return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() !== currentYear ? "numeric" : undefined });
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
   }
 
   function buildDateRows(trend, dateKey) {

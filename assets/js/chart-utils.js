@@ -271,6 +271,87 @@
   document.addEventListener("DOMContentLoaded", wireThemeListener);
   if (document.readyState !== "loading") wireThemeListener();
 
+  // ── Tanzania date/time helpers (single source of truth) ──────────────────
+  // Server timestamps are "YYYY-MM-DD HH:MM:SS" written in
+  // Africa/Dar_es_Salaam (UTC+03:00, no DST). These helpers parse such values
+  // as a UTC+03:00 wall clock and always format with timeZone
+  // "Africa/Dar_es_Salaam", so every browser shows the real Tanzania date/time
+  // regardless of the viewer's own timezone. The business date is the Tanzania
+  // calendar date and changes at 00:00 — never at 18:00.
+  const TZ_TANZANIA = "Africa/Dar_es_Salaam";
+
+  const TZ_DT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+
+  function tzParse(datetime) {
+    if (datetime instanceof Date) {
+      return Number.isNaN(datetime.getTime()) ? null : datetime;
+    }
+    if (!datetime) return null;
+    const s = String(datetime).trim();
+    const m = TZ_DT_RE.exec(s);
+    if (!m) {
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    const y = +m[1], mo = +m[2], da = +m[3];
+    const hh = +m[4] || 0, mm = +m[5] || 0, ss = +m[6] || 0;
+    // The value is a UTC+03:00 wall clock; the instant is 3 hours earlier in UTC.
+    return new Date(Date.UTC(y, mo - 1, da, hh, mm, ss) - 3 * 3600 * 1000);
+  }
+
+  function tzToday() {
+    try {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: TZ_TANZANIA,
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(new Date());
+      const pick = function (type) {
+        const p = parts.find(function (x) { return x.type === type; });
+        return p ? p.value : "";
+      };
+      return pick("year") + "-" + pick("month") + "-" + pick("day");
+    } catch (e) {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }
+
+  function tzFormat(datetime, opts) {
+    const d = tzParse(datetime);
+    if (!d) return "";
+    const merged = Object.assign({ timeZone: TZ_TANZANIA }, opts || {});
+    return d.toLocaleString(undefined, merged);
+  }
+
+  function tzFormatDate(datetime, opts) {
+    const d = tzParse(datetime);
+    if (!d) return "";
+    const merged = Object.assign({ timeZone: TZ_TANZANIA }, opts || {});
+    return d.toLocaleDateString(undefined, merged);
+  }
+
+  function tzFormatTime(datetime, opts) {
+    const d = tzParse(datetime);
+    if (!d) return "";
+    const merged = Object.assign({ timeZone: TZ_TANZANIA }, opts || {});
+    return d.toLocaleTimeString(undefined, merged);
+  }
+
+  // Date-only strings ("YYYY-MM-DD" or "YYYY-MM") anchor at the browser's OWN
+  // midnight so that when a chart axis re-renders them in the viewer's locale
+  // they show the exact same calendar date — no off-by-one on either side of
+  // the international date line. These date-only values come from the server
+  // as Tanzania business dates.
+  function parseBusinessDate(value) {
+    if (!value) return null;
+    const s = String(value).trim();
+    let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    m = /^(\d{4})-(\d{2})$/.exec(s);
+    if (m) return new Date(+m[1], +m[2] - 1, 1);
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
   // ── Public API ─────────────────────────────────────────────────────────────
   MpeliCharts.cssVar = cssVar;
   MpeliCharts.palette = palette;
@@ -289,8 +370,22 @@
   MpeliCharts.showChartEmpty = showChartEmpty;
   MpeliCharts.showChartError = showChartError;
   MpeliCharts.onAmReady = onAmReady;
+  MpeliCharts.tzParse = tzParse;
+  MpeliCharts.tzToday = tzToday;
+  MpeliCharts.tzFormat = tzFormat;
+  MpeliCharts.tzFormatDate = tzFormatDate;
+  MpeliCharts.tzFormatTime = tzFormatTime;
+  MpeliCharts.parseBusinessDate = parseBusinessDate;
 
   global.MpeliCharts = MpeliCharts;
+  global.MpeliTz = {
+    parse: tzParse,
+    today: tzToday,
+    format: tzFormat,
+    formatDate: tzFormatDate,
+    formatTime: tzFormatTime,
+    parseBusinessDate: parseBusinessDate,
+  };
 
   // If amCharts is already loaded, mark ready.
   onAmReady();

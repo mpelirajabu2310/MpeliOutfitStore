@@ -199,7 +199,7 @@ class ExcelReportService
     {
         $store = (string)($this->meta['store_name'] ?? 'Mpeli Outfit Store');
         $title = (string)($this->meta['title'] ?? 'Report');
-        $genAt = (string)($this->meta['generated_at'] ?? tz_now());
+        $genAt = (string)($this->meta['generated_at'] ?? date('Y-m-d H:i:s'));
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' .
             '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" ' .
             'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" ' .

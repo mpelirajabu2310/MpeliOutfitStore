@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (appShell) appShell.classList.add("hidden");
 
   const expenseDateInput = document.querySelector("#expenseDateInput");
-  if (expenseDateInput) expenseDateInput.max = MpeliTz.today();
+  if (expenseDateInput) expenseDateInput.max = new Date().toISOString().slice(0, 10);
 }, { once: true });
 
 // Theme system
@@ -763,7 +763,6 @@ function renderCart() {
 
   list.innerHTML = lines.join("") || `<p class="receipt-note">${t("sales.noProductsSelected")}</p>`;
   document.querySelector("#saleTotal").textContent = money(total);
-  updatePosCartFab(total);
   let cartProfit = 0;
   if (isOwner()) {
     [...cart.entries()].filter(([, qty]) => qty > 0).forEach(([id, qty]) => {
@@ -780,35 +779,9 @@ function renderCart() {
   renderBulkPanel();
 }
 
-function updatePosCartFab(total) {
-  const fab = document.querySelector("#posCartFab");
-  if (!fab) return;
-  const count = getCartTotalQuantity();
-  fab.classList.toggle("hidden", count === 0);
-  const countEl = document.querySelector("#posCartFabCount");
-  if (countEl) countEl.textContent = count;
-  const totalEl = document.querySelector("#posCartFabTotal");
-  if (totalEl) totalEl.textContent = money(total || 0);
-}
-
-function openPosCartSheet() {
-  const panel = document.querySelector(".receipt-panel");
-  if (!panel) return;
-  panel.classList.add("open");
-  document.querySelector("#posCartBackdrop")?.classList.add("active");
-  document.body.classList.add("pos-sheet-open");
-  panel.focus({ preventScroll: true });
-}
-
-function closePosCartSheet() {
-  document.querySelector(".receipt-panel")?.classList.remove("open");
-  document.querySelector("#posCartBackdrop")?.classList.remove("active");
-  document.body.classList.remove("pos-sheet-open");
-}
-
 function formatChartDay(day) {
-  const date = MpeliTz.parseBusinessDate(day);
-  return (!date || Number.isNaN(date.getTime())) ? day : date.toLocaleDateString(undefined, { weekday: "short" });
+  const date = new Date(`${day}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? day : date.toLocaleDateString(undefined, { weekday: "short" });
 }
 
 function renderBarChart(container, chart, hasData, valueKey = "value", showDayLabels = false) {
@@ -993,8 +966,9 @@ function renderSaleDetailsContent(sale) {
   const content = document.querySelector("#saleDetailsContent");
   if (!content) return;
 
-  const dateStr = MpeliTz.formatDate(sale.sale_date, { year: "numeric", month: "long", day: "numeric" });
-  const timeStr = MpeliTz.formatTime(sale.sale_date, { hour: "2-digit", minute: "2-digit" });
+  const saleDate = new Date(sale.sale_date);
+  const dateStr = saleDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  const timeStr = saleDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
   let totalQuantity = 0;
   let totalDiscount = 0;
@@ -1232,8 +1206,9 @@ async function loadAllSalesPage(page) {
     const isOwner = currentUser && currentUser.role === "OWNER";
 
     const rows = sales.map(sale => {
-      const dateStr = MpeliTz.formatDate(sale.sale_date, { year: "numeric", month: "short", day: "numeric" });
-      const timeStr = MpeliTz.formatTime(sale.sale_date, { hour: "2-digit", minute: "2-digit" });
+      const saleDate = new Date(sale.sale_date);
+      const dateStr = saleDate.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+      const timeStr = saleDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
       const profitCell = isOwner ? `<td class="all-sales-profit">${sale.total_profit === null ? t("role.hidden") : money(sale.total_profit)}</td>` : "";
       return `
         <tr>
@@ -1292,8 +1267,9 @@ function renderAllSalesCards(sales, isOwner) {
   const container = document.querySelector("#allSalesCards");
   if (!container) return;
   container.innerHTML = sales.map(sale => {
-    const dateStr = MpeliTz.formatDate(sale.sale_date, { year: "numeric", month: "short", day: "numeric" });
-    const timeStr = MpeliTz.formatTime(sale.sale_date, { hour: "2-digit", minute: "2-digit" });
+    const saleDate = new Date(sale.sale_date);
+    const dateStr = saleDate.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    const timeStr = saleDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
     const profitRow = isOwner ? `<div class="all-sales-card-row"><span>${t("table.profit")}</span><span class="all-sales-card-profit">${sale.total_profit === null ? t("role.hidden") : money(sale.total_profit)}</span></div>` : "";
     return `
       <div class="all-sales-card">
@@ -1820,9 +1796,10 @@ function populateAuditFilterOptions() {
 
 function formatAuditDate(datetime) {
   if (!datetime) return "";
+  const d = new Date(datetime.replace(" ", "T"));
+  if (isNaN(d.getTime())) return escapeHtml(datetime);
   const opts = { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" };
-  const formatted = MpeliTz.format(datetime, opts);
-  return formatted !== "" ? formatted : escapeHtml(datetime);
+  return d.toLocaleString(undefined, opts);
 }
 
 function renderAuditLogs(logs) {
@@ -1882,10 +1859,12 @@ function auditValue(value) {
 
 function formatAuditDateTime(datetime) {
   if (!datetime) return { date: "", time: "" };
-  const date = MpeliTz.formatDate(datetime, { year: "numeric", month: "short", day: "2-digit" });
-  const time = MpeliTz.formatTime(datetime, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  if (date === "" || time === "") return { date: escapeHtml(datetime), time: "" };
-  return { date, time };
+  const d = new Date(datetime.replace(" ", "T"));
+  if (isNaN(d.getTime())) return { date: escapeHtml(datetime), time: "" };
+  return {
+    date: d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" }),
+    time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+  };
 }
 
 function openAuditDetail(log) {
@@ -2257,8 +2236,9 @@ function setBackupStat(id, metaId, backup) {
 
 function formatBackupDate(datetime) {
   if (!datetime) return "—";
-  const formatting = MpeliTz.format(datetime, { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-  return formatting !== "" ? formatting : datetime;
+  const d = new Date(datetime.replace(" ", "T"));
+  if (isNaN(d.getTime())) return datetime;
+  return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function renderBackupHistory(backups) {
@@ -2829,7 +2809,6 @@ async function completePayment() {
 
     saleRequestKey = null;
     clearCartState();
-    closePosCartSheet();
     document.querySelector("#receiptNote").textContent = t("sales.paymentSaved", { receipt: payload.receipt_number });
     showToast(t("sales.paymentSaved", { receipt: payload.receipt_number }));
     await refreshAppData();
@@ -3118,7 +3097,6 @@ document.querySelectorAll(".nav-item").forEach(button => {
     document.querySelector(`#${button.dataset.page}`).classList.add("active");
     document.querySelector(".sidebar").classList.remove("open");
     closeSidebar();
-    closePosCartSheet();
     // Load page-specific data immediately
     const page = button.dataset.page;
     rememberPage(page);
@@ -3199,7 +3177,6 @@ document.querySelector("#sidebarBrand")?.addEventListener("click", async () => {
     const dashPage = document.querySelector("#dashboard");
     if (dashPage) dashPage.classList.add("active");
     closeSidebar();
-    closePosCartSheet();
     rememberPage("dashboard");
     await loadDashboard();
   } catch (_) { /* silent */ } finally {
@@ -3213,7 +3190,6 @@ window.addEventListener("resize", () => {
   const w = window.innerWidth;
   if ((_lastViewportWidth > 900 && w <= 900) || (_lastViewportWidth <= 900 && w > 900)) {
     closeSidebar();
-    closePosCartSheet();
   }
   _lastViewportWidth = w;
 }, { passive: true });
@@ -3610,16 +3586,6 @@ document.querySelector("#bulkDiscountPercent")?.addEventListener("input", event 
   renderCart();
 });
 
-// Mobile current-sale bottom sheet: floating button opens it, backdrop/Escape
-// and the modal close button close it. Opening/closing only changes visibility;
-// the cart (quantities, discounts, totals) is left untouched.
-document.querySelector("#posCartFab")?.addEventListener("click", openPosCartSheet);
-document.querySelector("#posCartBackdrop")?.addEventListener("click", closePosCartSheet);
-document.querySelector("#posCartClose")?.addEventListener("click", closePosCartSheet);
-document.addEventListener("keydown", event => {
-  if (event.key === "Escape") closePosCartSheet();
-});
-
 // ── Owner promotions management ──────────────────────────────────────────────
 let editingPromotionId = null;
 
@@ -3685,7 +3651,7 @@ function openPromotionModal(promo) {
   document.querySelector("#promoNameInput").value = promo ? promo.name : "";
   document.querySelector("#promoDescriptionInput").value = promo ? (promo.description || "") : "";
   document.querySelector("#promoPercentageInput").value = promo ? promo.percentage : "";
-  document.querySelector("#promoStartDate").value = promo ? promo.start_date : MpeliTz.today();
+  document.querySelector("#promoStartDate").value = promo ? promo.start_date : new Date().toISOString().slice(0, 10);
   document.querySelector("#promoStartTime").value = promo ? (promo.start_time || "") : "";
   document.querySelector("#promoEndDate").value = promo ? promo.end_date : "";
   document.querySelector("#promoEndTime").value = promo ? (promo.end_time || "") : "";
@@ -3860,7 +3826,7 @@ document.querySelector("#saveExpenseButton")?.addEventListener("click", async ()
   const expenseName = document.querySelector("#expenseCustomName").value.trim();
   const description = document.querySelector("#expenseDescription").value.trim();
   const amount = Number(document.querySelector("#expenseAmountInput").value);
-  const expenseDate = document.querySelector("#expenseDateInput").value || MpeliTz.today();
+  const expenseDate = document.querySelector("#expenseDateInput").value || new Date().toISOString().slice(0, 10);
   const errorEl = document.querySelector("#expenseFormError");
 
   if (errorEl) errorEl.style.display = "none";
@@ -3870,7 +3836,7 @@ document.querySelector("#saveExpenseButton")?.addEventListener("click", async ()
     return;
   }
 
-  if (expenseDate > MpeliTz.today()) {
+  if (expenseDate > new Date().toISOString().slice(0, 10)) {
     if (errorEl) { errorEl.textContent = t("expenses.futureDate"); errorEl.style.display = "block"; }
     return;
   }
@@ -4313,10 +4279,10 @@ function updateClock() {
   const timeEl = document.querySelector("#clockTime");
   const dateEl = document.querySelector("#clockDate");
   if (timeEl) {
-    timeEl.textContent = MpeliTz.formatTime(now, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
   if (dateEl) {
-    dateEl.textContent = MpeliTz.formatDate(now, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    dateEl.textContent = now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   }
 }
 
@@ -4740,19 +4706,13 @@ function setupBIEvents() {
   document.querySelector("#biApplyCustom")?.addEventListener("click", () => {
     const s = document.querySelector("#biStartDate")?.value;
     const e = document.querySelector("#biEndDate")?.value;
-    if (!s || !e) {
-      showToast(t("wizard.customDatesRequired"), "error");
-      return;
+    if (s && e) {
+      biStartDate = s;
+      biEndDate = e;
+      biCurrentPeriod = "custom";
+      setBIPeriodActive("custom");
+      loadBIView();
     }
-    if (s > e) {
-      showToast(t("reports.invalidRange"), "error");
-      return;
-    }
-    biStartDate = s;
-    biEndDate = e;
-    biCurrentPeriod = "custom";
-    setBIPeriodActive("custom");
-    loadBIView();
   });
 
   // View switching (Performance Overview | Performance Breakdown)

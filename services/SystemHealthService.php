@@ -349,6 +349,10 @@ class SystemHealthService
         if (!is_dir($logDir)) {
             @mkdir($logDir, 0750, true);
         }
+        $guard = $logDir . '/.htaccess';
+        if (!is_file($guard)) {
+            @file_put_contents($guard, "Require all denied\n");
+        }
 
         $status = $result['healthy'] ? 'PASS' : 'FAIL';
         $summary = "[{$result['timestamp']}] [health_check] [$status] PHP {$result['php_version']}" . PHP_EOL;

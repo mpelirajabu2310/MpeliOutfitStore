@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expenseName = trim((string)($data['expense_name'] ?? ''));
     $description = trim((string)($data['description'] ?? ''));
     $amount = (float)($data['amount'] ?? 0);
-    $expenseDate = (string)($data['expense_date'] ?? tz_today());
+    $expenseDate = (string)($data['expense_date'] ?? date('Y-m-d'));
 
     if ($category === '' || $amount <= 0) {
         respond(['success' => false, 'message' => 'Expense amount must be greater than zero.'], 422);
@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
         respond(['success' => false, 'message' => 'Invalid expense_date format. Use YYYY-MM-DD.'], 422);
     }
-    if ($expenseDate > tz_today()) {
+    if ($expenseDate > date('Y-m-d')) {
         respond(['success' => false, 'message' => 'Expense date cannot be in the future.'], 422);
     }
     if (strlen($expenseName) > 255) {
@@ -120,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if ($expenseDate !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $expenseDate)) {
         respond(['success' => false, 'message' => 'Invalid expense_date format. Use YYYY-MM-DD.'], 422);
     }
-    if ($expenseDate !== '' && $expenseDate > tz_today()) {
+    if ($expenseDate !== '' && $expenseDate > date('Y-m-d')) {
         respond(['success' => false, 'message' => 'Expense date cannot be in the future.'], 422);
     }
     if (strlen($expenseName) > 255) {

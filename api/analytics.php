@@ -27,6 +27,15 @@ if (!AnalyticsService::isValidPeriod($period)) {
     respond(['success' => false, 'message' => 'Invalid period.'], 400);
 }
 
+if ($period === 'custom') {
+    if ($customStart === null || $customEnd === null || trim($customStart) === '' || trim($customEnd) === '') {
+        respond(['success' => false, 'message' => 'Custom period requires both start_date and end_date.'], 400);
+    }
+    if ($customStart > $customEnd) {
+        respond(['success' => false, 'message' => 'start_date must not be after end_date.'], 400);
+    }
+}
+
 $range = AnalyticsService::resolveDateRange($period, $customStart, $customEnd);
 $start = $range['start'];
 $end = $range['end'];
@@ -41,7 +50,7 @@ if (!$isOwner) {
 switch ($action) {
     case 'dashboard':
         $kpis = $analytics->getDashboardKPIs($start, $end, $sellerFilter);
-        $comparison = $analytics->getComparison($period, $sellerFilter);
+        $comparison = $analytics->getComparison($period, $sellerFilter, $start, $end);
         $dailySummary = null;
         $insights = null;
         if ($isOwner) {
@@ -232,7 +241,7 @@ switch ($action) {
         break;
 
     case 'growth':
-        $growth = $analytics->getGrowthAnalysis($period, $sellerFilter);
+        $growth = $analytics->getGrowthAnalysis($period, $sellerFilter, $start, $end);
         respond([
             'success' => true,
             'growth' => $growth,

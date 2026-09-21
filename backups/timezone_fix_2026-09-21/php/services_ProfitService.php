@@ -72,7 +72,7 @@ class ProfitService extends BaseService
             $where = ' AND s.sale_date >= :start_date AND s.sale_date < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         if ($userId !== null) {
@@ -124,7 +124,7 @@ class ProfitService extends BaseService
             );
             $stmt->execute([
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ]);
             return (float)$stmt->fetchColumn();
         }
@@ -166,7 +166,7 @@ class ProfitService extends BaseService
             $where = ' expense_date >= :start_date AND expense_date < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         if ($userId !== null) {
@@ -195,7 +195,7 @@ class ProfitService extends BaseService
             $where = ' WHERE expense_date >= :start_date AND expense_date < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         if ($userId !== null) {
@@ -313,7 +313,7 @@ class ProfitService extends BaseService
             $where = ' AND sale_date >= :start_date AND sale_date < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         if ($userId !== null) {

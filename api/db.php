@@ -192,12 +192,25 @@ function get_client_ip(): string
     return '0.0.0.0';
 }
 
+function _ensure_log_guard(): void
+{
+    $logDir = __DIR__ . '/../logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0750, true);
+    }
+    $guard = $logDir . '/.htaccess';
+    if (!is_file($guard)) {
+        @file_put_contents($guard, "Require all denied\n");
+    }
+}
+
 function _rate_limit_dir(): string
 {
     $dir = __DIR__ . '/../logs/ratelimit';
     if (!is_dir($dir)) {
         @mkdir($dir, 0750, true);
     }
+    _ensure_log_guard();
     return $dir;
 }
 
@@ -255,6 +268,7 @@ function log_activity(int $userId, string $event, string $details = '', string $
     if (!is_dir($logDir)) {
         @mkdir($logDir, 0750, true);
     }
+    _ensure_log_guard();
     @file_put_contents($logDir . '/activity.log', $logLine, FILE_APPEND | LOCK_EX);
 }
 

@@ -105,14 +105,14 @@ class PromotionService extends BaseService
             throw new RuntimeException('Promotion not found.');
         }
 
-        if ($status === 'active' && $existing['end_date'] < tz_today()) {
+        if ($status === 'active' && $existing['end_date'] < date('Y-m-d')) {
             throw new RuntimeException('This promotion has already ended and cannot be activated.');
         }
         // Optional end time on the same day
         if ($status === 'active'
-            && $existing['end_date'] === tz_today()
+            && $existing['end_date'] === date('Y-m-d')
             && $existing['end_time'] !== null
-            && $existing['end_time'] < tz_time()) {
+            && $existing['end_time'] < date('H:i:s')) {
             throw new RuntimeException('This promotion has already ended and cannot be activated.');
         }
 
@@ -276,7 +276,7 @@ class PromotionService extends BaseService
 
         $start = $startDate !== '' ? $startDate . ' ' . ($startTime !== '' ? $startTime : '00:00:00') : '';
         $end = $endDate !== '' ? $endDate . ' ' . ($endTime !== '' ? $endTime : '23:59:59') : '';
-        $now = tz_now();
+        $now = date('Y-m-d H:i:s');
 
         if ($start !== '' && $now < $start) {
             return 'scheduled';

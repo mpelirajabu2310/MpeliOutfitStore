@@ -596,7 +596,7 @@ class SalesService extends BaseService
             $dateFilter = ' AND sale_date >= :start_date AND sale_date < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         $stmt = $this->db->prepare(
@@ -680,7 +680,7 @@ class SalesService extends BaseService
         }
         return [
             'start_date' => $startDate . ' 00:00:00',
-            'end_date' => tz_day_after($endDate) . ' 00:00:00',
+            'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
         ];
     }
 

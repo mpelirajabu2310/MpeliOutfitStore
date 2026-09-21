@@ -103,8 +103,8 @@ class AuditService extends BaseService
             $params['date_from'] = $filters['date_from'] . ' 00:00:00';
         }
         if (!empty($filters['date_to'])) {
-            $where[] = 'al.created_at < :date_to';
-            $params['date_to'] = tz_day_after($filters['date_to']) . ' 00:00:00';
+            $where[] = 'al.created_at <= :date_to';
+            $params['date_to'] = $filters['date_to'] . ' 23:59:59';
         }
 
         $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';

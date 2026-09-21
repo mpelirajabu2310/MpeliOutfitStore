@@ -215,7 +215,7 @@ class InventoryService extends BaseService
             $sql .= ' WHERE im.created_at >= :start_date AND im.created_at < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         $sql .= ' ORDER BY im.created_at DESC LIMIT ' . max(1, min(2000, $limit));
@@ -241,7 +241,7 @@ class InventoryService extends BaseService
             $sql .= ' AND im.created_at >= :start_date AND im.created_at < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         $sql .= ' ORDER BY im.created_at DESC LIMIT ' . max(1, min(2000, $limit));

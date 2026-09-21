@@ -378,8 +378,11 @@ $assetVersion = static function (string $path): string {
             <div class="panel-title"><h3 data-i18n="sales.productSelection">Product Selection</h3><span data-i18n="sales.tapItems">Tap items to sell</span></div>
             <div class="pos-products" id="posProducts"></div>
           </article>
-          <article class="panel receipt-panel">
-            <h3 data-i18n="sales.currentSale">Current Sale</h3>
+          <article class="panel receipt-panel" role="dialog" aria-modal="false" aria-label="Current Sale" data-i18n-aria-label="sales.currentSale" tabindex="-1">
+            <div class="receipt-panel-head">
+              <h3 data-i18n="sales.currentSale">Current Sale</h3>
+              <button type="button" class="reset-close" id="posCartClose" aria-label="Close" data-i18n-aria-label="common.close"><i class="bi bi-x-lg"></i></button>
+            </div>
             <div id="cartList" class="cart-list"></div>
             <div class="receipt-row"><span data-i18n="sales.total">Total</span><strong id="saleTotal">TSH 0</strong></div>
             <div class="receipt-row owner-only"><span data-i18n="table.profit">Profit</span><strong id="saleProfit">TSH 0</strong></div>
@@ -402,6 +405,12 @@ $assetVersion = static function (string $path): string {
             <p class="receipt-footer" id="receiptStoreRole"></p>
           </article>
         </section>
+        <button type="button" class="pos-cart-fab hidden" id="posCartFab" aria-label="Current Sale" data-i18n-aria-label="sales.currentSale">
+          <i class="bi bi-cart-fill" aria-hidden="true"></i>
+          <span class="pos-cart-fab-count" id="posCartFabCount">0</span>
+          <span class="pos-cart-fab-total" id="posCartFabTotal">TSH 0</span>
+        </button>
+        <div class="pos-cart-backdrop" id="posCartBackdrop" aria-hidden="true"></div>
       </main>
       <main class="page owner-only" id="inventory">
         <div class="page-heading"><div><p class="eyebrow" data-i18n="inventory.eyebrow">Stock Room</p><h2 data-i18n="nav.inventory">Inventory</h2></div></div>

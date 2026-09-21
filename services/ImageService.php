@@ -148,6 +148,11 @@ class ImageService
             throw new RuntimeException('Unable to store image.');
         }
 
+        $uploadGuard = dirname($dir) . '/.htaccess';
+        if (!is_file($uploadGuard)) {
+            @file_put_contents($uploadGuard, "Options -Indexes\n\n<FilesMatch \"\\.(php|php3|php4|php5|php7|php8|phtml|phar|pl|py|cgi|asp|aspx|sh|js|html?|svg)$\">\n    Require all denied\n</FilesMatch>\n");
+        }
+
         $suffix = bin2hex(random_bytes(4));
         $relativeBase = rtrim((string)$this->config['upload_url_base'], '/') . '/p' . $productId . '_' . $suffix;
 

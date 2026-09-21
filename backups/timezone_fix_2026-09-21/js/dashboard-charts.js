@@ -11,12 +11,12 @@
   const M = global.MpeliCharts;
 
   function dayName(dateStr) {
-    const d = M.parseBusinessDate(dateStr) || new Date(NaN);
+    const d = new Date(dateStr + "T00:00:00Z");
     return Number.isNaN(d.getTime()) ? dateStr : d.toLocaleDateString(undefined, { weekday: "short" });
   }
 
   function shortDate(dateStr) {
-    const d = M.parseBusinessDate(dateStr) || new Date(NaN);
+    const d = new Date(dateStr + "T00:00:00Z");
     if (Number.isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }

@@ -182,7 +182,7 @@ class ExpenseService extends BaseService
         if ($startDate !== null && $endDate !== null) {
             $wheres[] = 'e.expense_date >= :start_date AND e.expense_date < :end_date';
             $params['start_date'] = $startDate . ' 00:00:00';
-            $params['end_date'] = tz_day_after($endDate) . ' 00:00:00';
+            $params['end_date'] = date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00';
         }
         if (count($wheres) > 0) {
             $sql .= ' WHERE ' . implode(' AND ', $wheres);
@@ -224,7 +224,7 @@ class ExpenseService extends BaseService
         if ($startDate !== null && $endDate !== null) {
             $wheres[] = 'expense_date >= :start_date AND expense_date < :end_date';
             $params['start_date'] = $startDate . ' 00:00:00';
-            $params['end_date'] = tz_day_after($endDate) . ' 00:00:00';
+            $params['end_date'] = date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00';
         }
         if (count($wheres) > 0) {
             $sql .= ' WHERE ' . implode(' AND ', $wheres);
@@ -243,7 +243,7 @@ class ExpenseService extends BaseService
             $where = ' WHERE expense_date >= :start_date AND expense_date < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         if ($userId !== null) {
@@ -267,7 +267,7 @@ class ExpenseService extends BaseService
             $where = ' WHERE expense_date >= :start_date AND expense_date < :end_date';
             $params = [
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ];
         }
         if ($userId !== null) {

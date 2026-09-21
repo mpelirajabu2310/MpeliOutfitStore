@@ -286,7 +286,7 @@ class ReportService extends BaseService
                 'currency' => $store['currency_code'] ?? 'TSH',
                 'generated_by' => (string)($user['name'] ?? ''),
                 'role' => $user['role'] ?? 'SELLER',
-                'generated_at' => tz_now(),
+                'generated_at' => date('Y-m-d H:i:s'),
                 'period_start' => $range['start'] ?? '',
                 'period_end' => $range['end'] ?? '',
                 'period' => $period,
@@ -622,7 +622,7 @@ class ReportService extends BaseService
             );
             $psStmt->execute([
                 'start_date' => $startDate . ' 00:00:00',
-                'end_date' => tz_day_after($endDate) . ' 00:00:00',
+                'end_date' => date('Y-m-d', strtotime($endDate . ' +1 day')) . ' 00:00:00',
             ]);
             $productsSold = (int)$psStmt->fetchColumn();
         } else {
@@ -650,7 +650,7 @@ class ReportService extends BaseService
         }
 
         return [
-            'generated_at' => tz_now(),
+            'generated_at' => date('Y-m-d H:i:s'),
             'generated_by' => $generatedBy,
             'currency' => 'TSH',
             'period_start' => $startDate ?? '',
