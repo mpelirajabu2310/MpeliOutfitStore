@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/timezone_helpers.php';
 require_once __DIR__ . '/../services/SystemHealthService.php';
 
 header('Content-Type: application/json; charset=utf-8');

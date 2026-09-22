@@ -85,6 +85,7 @@ if (!headers_sent()) {
 }
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/timezone_helpers.php';
 $pdo = get_db();
 
 // ─── CSRF Token Helpers ─────────────────────────────────────────────────────
